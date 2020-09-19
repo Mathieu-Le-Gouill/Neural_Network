@@ -1,7 +1,5 @@
 # Neural_Network
-*Here is some code of a C++ neural network.
-
-
+*Here is some code of a C++ neural network
   *What is an Artificial Neural Network ?
 
     -Artificial Neural Network is used in a particuliar domain of the machine learning : the deep learning.
@@ -19,3 +17,4 @@
     -The nn work in two different ways :
         Forward Propagation : Where it compute the network output by processing the given input in each layers each one depending of the former.
         Backward Propagation : Where it compute the loss gradient of each layers so that it can use the gradient descent latter on.
+
