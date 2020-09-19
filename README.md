@@ -26,9 +26,8 @@
   
   <h3>The forward propagation :</h3>
   <img src="https://images.deepai.org/django-summernote/2019-06-06/5c17d9c2-0ad4-474c-be8d-d6ae9b094e74.png">
-  Where it compute the network output by processing the given input in each layers each one depending of the former.
+  Where it assign the given input to the input layer neuron's values, then compute the next layer using the biases and the weights linked between themselves and the latter         neuron's. Keep repeating the operation for each hiddens layers until it reach the output layer and give the corresponding outpout.
        
   <h3>The back propagation :</h3>
   <img src="https://www.guru99.com/images/1/030819_0937_BackPropaga1.png" width="50%" height="50%">
-  Where it compute the loss gradient of each layers so that it can use the gradient descent latter on.
-
+  Where it compute the loss of the last layer, then propagate it using weights and biases to get the gradient of each layers so that we can use the gradient descent latter on.
