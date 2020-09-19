@@ -1,5 +1,5 @@
 # Neural_Network
-Here is the code of a Neural Network coded in C++.
+Here is some code of a C++ neural network.
 
 
   *What is an Artificial Neural Network ?
