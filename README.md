@@ -24,10 +24,10 @@
 
   It works in two different ways :
   <li>The Forward Propagation : </li>
-  ![Forward Propagation](https://images.deepai.org/django-summernote/2019-06-06/5c17d9c2-0ad4-474c-be8d-d6ae9b094e74.png)
+  <img src="https://images.deepai.org/django-summernote/2019-06-06/5c17d9c2-0ad4-474c-be8d-d6ae9b094e74.png">
   Where it compute the network output by processing the given input in each layers each one depending of the former.
        
   <li> The Back Propagation : </li>
-  ![Back Propagation](https://www.guru99.com/images/1/030819_0937_BackPropaga1.png)
+  <img src="https://www.guru99.com/images/1/030819_0937_BackPropaga1.png" width="50%" height="50%">
   Where it compute the loss gradient of each layers so that it can use the gradient descent latter on.
 
