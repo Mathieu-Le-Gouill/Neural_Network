@@ -12,7 +12,7 @@
   So that each neurons in a given layer affect all the following layers neurons depending of the weights impact.
      
   <img src="https://miro.medium.com/max/791/0*hzIQ5Fs-g8iBpVWq.jpg" width="50%" height="50%">
-  <i> (image ref : [link](https://towardsdatascience.com/coding-neural-network-forward-propagation-and-backpropagtion-ccf8cf369f76)) </i>
+  (image ref : [link](https://towardsdatascience.com/coding-neural-network-forward-propagation-and-backpropagtion-ccf8cf369f76))
   
      
   Here is a link to get a better understanding of the neural network : http://neuralnetworksanddeeplearning.com/chap1.html
