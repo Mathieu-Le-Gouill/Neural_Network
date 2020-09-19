@@ -1,7 +1,6 @@
 # Neural_Network
-## Here is some code of a C++ neural network
   
- What is an Artificial Neural Network ?
+  ## What is an Artificial Neural Network ?
 
     Artificial Neural Network is used in a particuliar domain of the machine learning : the deep learning.
     It's concept is actually inspired by the human brain, by simply replacing the synapses and neurons by numbers.
@@ -16,7 +15,7 @@
      
      Here is a link to get a better understanding of the neural network : http://neuralnetworksanddeeplearning.com/chap1.html
 
- How works a Neural Network ?
+ ## How works a Neural Network ?
 
     By processing data and the targeted output, the Neural Network use stochastic gradient descent to reduce how wrong the neural network's output is between its current result       and the targeted value. So that it can reduce the error it got at each new steps.
 
