@@ -17,5 +17,5 @@ Here is the code of a Neural Network coded in C++.
     -By processing data and the targeted output, the Neural Network use stochastic gradient descent to reduce how wrong the nn's output is between its current result and the            targeted value. So that it can reduce the error it got at each new steps.
 
     -The nn work in two different ways :
-        Foward Propagation : Where it compute the network output by processing the given input in each layers each one depending of the former.
+        Forward Propagation : Where it compute the network output by processing the given input in each layers each one depending of the former.
         Backward Propagation : Where it compute the loss gradient of each layers so that it can use the gradient descent latter on.
