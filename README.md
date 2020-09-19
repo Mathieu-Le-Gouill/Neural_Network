@@ -13,7 +13,8 @@
      
      https://www.houseofbots.com/images/news/2590/cover.png
      
-     Here is a link to get a better understanding of the neural network : http://neuralnetworksanddeeplearning.com/chap1.html
+     Here is a link to get a better understanding of the neural network : [http://neuralnetworksanddeeplearning.com/chap1.html](http://neuralnetworksanddeeplearning.com/chap1.html)
+     [submission page](https://www.kaggle.com/c/digit-recognizer/submit)
 
  ## How works a Neural Network ?
 
