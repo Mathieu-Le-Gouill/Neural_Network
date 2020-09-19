@@ -2,7 +2,7 @@
 #include <vector>
 #include "assert.h"
 #include <iostream>
-#include <array>
+#include <math.h>
 
 template <class Type>
 class Matrix
@@ -14,22 +14,27 @@ public:
 	~Matrix();// Destructor
 
 	void print(int approximateCoefficient = 10) const;// Method to show the matrix values 
+	void clear();//Method to clear the matrix
 	bool empty() const;// Method to check if the matrix is empty
 	std::vector<Type>& back() const;// Method to obtain the last column of the matrix
 
 	void add_a_Row(const std::vector<Type> &row);//Method to add a row to the matrix
 	void add_a_Column(const std::vector<Type> &column);//Method to add a column to the matrix
-	void setSize(unsigned nbCols, unsigned nbRows);// Method to set the matrix size
+	void emplace_Back(const Matrix<Type>& matrix);//Method to add a matrix at the back of the current one
+	void setSize(unsigned nbCols, unsigned nbRows=0);// Method to set the matrix size
+	void fill(Type value);// Method to fill the matrix with a constant value
 
 	unsigned size() const;// Method to get the matrix size : columns by rows
-	unsigned rows() const;// Method to get the matrix rows number
 	unsigned columns() const;// Method to get the matrix columns number
+	unsigned rows() const;// Method to get the matrix rows number
 	Type determinant() const;// Method to get the matrix determinant
 	Matrix<Type> identity() const;// Method to get the matrix identity
 
 	Matrix<Type> transpose() const;// Method to get the matrix transpose : rows to columns
+	Matrix<Type> vectorise() const;// Method to vectorise the matrix
 	Matrix<Type> inverse() const;// Method to get the matrix inverse 
 	Matrix<Type> scalar(Matrix<Type> matrix) const;//Method to use the scalar product on a vector
+	Matrix<Type> sample(unsigned coordinateX, unsigned coordinateY, size_t sampleWidth, size_t sampleHeight);
 
 	Matrix<Type> operator *(Type value) const;// Method to manipulate * operator with a constant value
 	Matrix<Type> operator /(Type value) const;// Method to manipulate / operator with a constant value
@@ -53,6 +58,8 @@ public:
 	void operator /=(const Matrix<Type> &matrix);// Method to manipulate /= operator with a matrix
 
 	std::vector<Type>& operator [](unsigned index);// Method to manipulate [] operator with a matrix
+	std::vector<Type> operator [](unsigned index) const;// Method to manipulate [] operator with a matrix
+
 
 	bool operator ==(const Matrix<Type> &matrix) const;//Method to manipulate == operator with a matrix
 	bool operator !=(const Matrix<Type> &matrix) const;//Method to manipulate != operator with a matrix
@@ -84,15 +91,11 @@ Matrix<Type>::Matrix(unsigned nbCols, unsigned nbRows, Type value)// Overladen c
 
 	this->m_nbRows = nbRows;
 	this->m_nbCols = nbCols;
+	this->m_values.reserve(nbRows);// Reserve the vector capacity
 
 	for (unsigned r = 0; r < nbRows; r++)// For each rows
 	{
-		this->m_values.push_back(std::vector<Type>());// Add a new row
-
-		for (unsigned c = 0; c < nbCols; c++)// For each columns
-		{
-			this->m_values[r].push_back(value);// Add a value to the matrix
-		}
+		this->m_values.push_back(std::vector<Type>(nbCols, value));// Add a new row
 	}
 }
 
@@ -106,7 +109,8 @@ inline Matrix<Type>::Matrix(const std::vector<std::vector<Type>> &matrix)// Over
 		this->m_nbRows = matrix.size();
 		this->m_nbCols = matrix.front().size();
 	}
-	else Matrix::Matrix();
+	else 
+		Matrix::Matrix();
 }
 
 
@@ -159,15 +163,17 @@ Matrix<Type> Matrix<Type>::operator ^(Type value) const// Method to manipulate ^
 {
 	assert(this->m_nbRows == this->m_nbCols && "Error : the given matrix must be square to use operator ^");// Be sure that this is a square matrix
 
-	Matrix<Type> matrix = *this;
+	Matrix<Type> matrix(this->m_nbCols, this->m_nbRows);
 
-	for (int i = 1; i < value; i++)// From the current matrix power to the given value
+	const unsigned& nbRows = matrix.m_nbRows;
+	const unsigned& nbCols = matrix.m_nbCols;
+
+	for (unsigned r = 0; r < nbRows; r++)// For each rows
 	{
-		matrix = matrix * matrix;// Multiply the matrix by itself to attein the power asked
-	}
-	if (value == -1)// If the given power is -1
-	{
-		matrix = matrix.inverse();// Inverse the matrix
+		for (unsigned c = 0; c < nbCols; c++)// For each columns
+		{
+			matrix.m_values[r][c] = pow(this->m_values[r][c], value);// Compute the power setting
+		}
 	}
 
 	return matrix;
@@ -190,9 +196,12 @@ Matrix<Type> Matrix<Type>::operator *(const Matrix<Type> &matrix) const// Method
 	const unsigned &nbRows = matrixC.m_nbRows;
 	const unsigned &nbCols = matrixC.m_nbCols;
 
+	matrixC.m_values.reserve(nbRows);
+
 	for (unsigned r = 0; r < nbRows; r++)// For each rows
 	{
-		matrixC.m_values.push_back(std::vector<Type>());
+		matrixC.m_values.push_back(std::vector<Type>(nbCols));
+
 		for (unsigned c = 0; c < nbCols; c++)// For each columns
 		{
 			Type sum = 0;
@@ -200,7 +209,7 @@ Matrix<Type> Matrix<Type>::operator *(const Matrix<Type> &matrix) const// Method
 			{
 				sum += matrixA.m_values[r][i] * matrixB.m_values[i][c];// Product of matrix A rows by matrix B columns
 			}
-			matrixC.m_values.back().push_back(sum);// Add the sum to matrix C value
+			matrixC.m_values.back()[c] = sum;// Add the sum to matrix C value
 		}
 	}
 
@@ -272,7 +281,7 @@ template<class Type>
 	this->m_nbRows = matrix.m_nbRows;
 	this->m_nbCols = matrix.m_nbCols;
 	this->m_values = matrix.m_values;
-	// Copy the matrix values;
+	// Copy the matrix attributes;
 
 	return *this;
 }
@@ -347,6 +356,16 @@ template<class Type>
 	 return this->m_values[index];
  }
 
+ template<class Type>
+ inline std::vector<Type> Matrix<Type>::operator[](unsigned index) const// Method to manipulate [] operator with a matrix
+ {
+	 assert(index < this->m_values.size() && "Error : the given value is out of the matrix range...");
+	 // Be sure that the given index value belongs to the vector size
+	 
+	 return this->m_values[index];
+ }
+
+
 
  template<class Type>
  inline bool Matrix<Type>::operator ==(const Matrix<Type>& matrix) const//Method to manipulate == operator with a matrix
@@ -378,6 +397,16 @@ inline void Matrix<Type>::print(int approximateCoefficient) const// Method to sh
 	}
 }
 
+template<class Type>
+inline void Matrix<Type>::clear()
+{
+	this->m_values.clear();
+	this->m_values.shrink_to_fit();
+
+	this->m_nbRows = 0;
+	this->m_nbCols = 0;
+}
+
 
 template<class Type>
 inline bool Matrix<Type>::empty() const// Method to check if the matrix is empty
@@ -407,16 +436,33 @@ inline void Matrix<Type>::add_a_Column(const std::vector<Type> &column)//Method 
 	const unsigned &nbRows = this->m_nbRows;
 	if (this->empty()) this->setSize(1, column.size());
 
-	for (unsigned r = 0; r < nbRows; r++)
+	for (unsigned r = 0; r < nbRows; r++)// For each rows
 		this->m_values[r].push_back(column[r]);// Add the column to the matrix
+}
+
+template<class Type>
+inline void Matrix<Type>::emplace_Back(const Matrix<Type>& matrix)
+{
+	const Matrix<Type> &matrixA = matrix;
+
+	for (unsigned i = 0; i < matrixA.m_nbRows; i++)// For each rows
+	{
+		this->m_values.reserve(m_values.capacity() + matrixA.m_nbRows);
+		this->add_a_Row(matrixA.m_values[i]);
+	}
+	this->m_values.shrink_to_fit();
 }
 
 
 template<class Type>
 inline void Matrix<Type>::setSize(unsigned nbCols, unsigned nbRows)// Method to set the matrix size
 {
+	if (this->empty())
+		*this = Matrix::Matrix(nbCols, nbRows);
+
 	if (this->m_nbRows != nbRows || this->m_nbCols != nbCols)
 	{
+		this->m_values.reserve(nbRows);
 
 		while (this->m_nbRows != nbRows)// While the matrix number rows still different that the number requested
 		{
@@ -450,9 +496,31 @@ inline void Matrix<Type>::setSize(unsigned nbCols, unsigned nbRows)// Method to 
 				this->m_nbCols--;
 			}
 		}
-		
+
+		this->m_values.shrink_to_fit();
+		for (unsigned r = 0; r < nbRows; r++)
+		{
+			this->m_values[r].shrink_to_fit();
+		}
 	}
 }
+
+
+template<class Type>
+inline void Matrix<Type>::fill(Type value)
+{
+	const unsigned& nbRows = this->m_nbRows;
+	const unsigned& nbCols = this->m_nbCols;
+
+	for (unsigned r = 0; r < nbRows; r++)// For each rows
+	{
+		for (unsigned c = 0; c < nbCols; c++)// For each columns
+		{
+			this->m_values[r][c] = value;
+		}
+	}
+}
+
 
 template<class Type>
 inline unsigned Matrix<Type>::size() const// Method to get the matrix size
@@ -523,7 +591,7 @@ inline Matrix<Type> Matrix<Type>::identity() const// Method to get the matrix id
 	assert(this->m_nbRows == this->m_nbCols && "Error : the given matrix must be square to use identity method...");
 	// Be sure that this is a square matrix
 
-	Matrix<Type> matrix = *this;
+	Matrix<Type> matrix(m_nbCols, m_nbRows,0);
 
 	const unsigned &nbRows = this->m_nbRows;
 	const unsigned &nbCols = this->m_nbCols;
@@ -534,10 +602,7 @@ inline Matrix<Type> Matrix<Type>::identity() const// Method to get the matrix id
 		{
 			if (c == r)
 				matrix.m_values[r][c] = 1;// Construct the middle diagonal of the identity matrix
-			else
-				matrix.m_values[r][c] = 0;// Fill the rest of the matrix
 		}
-		std::cout << "\n";
 	}
 
 	return matrix;
@@ -555,12 +620,29 @@ Matrix<Type> Matrix<Type>::transpose() const// Method to transpose the matrix ro
 	const unsigned &nbRows = matrix.m_nbRows;
 	const unsigned &nbCols = matrix.m_nbCols;
 
+	matrix.m_values.reserve(nbRows);
+
 	for (unsigned r = 0; r < nbRows; r++)// For each rows
 	{
-		matrix.m_values.push_back(std::vector<Type>());
+		matrix.m_values.push_back(std::vector<Type>(nbCols));
 		for (unsigned c = 0; c < nbCols; c++)// For each columns
 		{
-			matrix.m_values.back().push_back(this->m_values[c][r]);// Transpose the matrix rows to columns
+			matrix.m_values.back()[c] = this->m_values[c][r];// Transpose the matrix rows to columns
+		}
+	}
+	return matrix;
+}
+
+template<class Type>
+inline Matrix<Type> Matrix<Type>::vectorise() const// Method to vectorise the matrix
+{
+	Matrix<Type> matrix(this->size());
+	
+	for (size_t r = 0; r < m_values.size(); r++)
+	{
+		for (size_t c = 0; c < m_values[r].size(); c++)
+		{
+			matrix[0][m_nbCols*r + c] = this->m_values[r][c];
 		}
 	}
 	return matrix;
@@ -575,7 +657,7 @@ inline Matrix<Type> Matrix<Type>::inverse() const// Method to inverse the matrix
 	assert(this->determinant() != 0 && "Error : the given matrix can't be inversed, the matrix determinant is equal to 0...");
 	// Be sure that the determinant of the given matrix is different to 0
 
-	Matrix<Type> matrix = *this;
+	Matrix<Type> matrix(m_nbCols, m_nbRows);
 
 	const unsigned &matrixSize = this->m_nbCols;// Matrix square size
 
@@ -619,23 +701,41 @@ inline Matrix<Type> Matrix<Type>::inverse() const// Method to inverse the matrix
 template<class Type>
 inline Matrix<Type> Matrix<Type>::scalar(Matrix<Type> matrix) const
 {
-	const Matrix<Type> &matrixA = *this;
+	Matrix<Type> matrixA = *this;
 	const Matrix<Type> &matrixB = matrix;
 	assert(matrixA.rows() == matrixB.rows() && matrixA.columns() == matrixB.columns() && (matrixA.rows() == 1 || matrixA.columns() == 1) && "Error : the matrices used must have an equal size to use the scalar function");
 	// Be sure that the both matrices have the same size and are both vectors
 
-	Matrix<Type> matrixC = matrixA;
-	unsigned nbRows = matrixC.rows();
-	unsigned nbCols = matrixC.columns();
+	unsigned nbRows = matrixA.rows();
+	unsigned nbCols = matrixA.columns();
 
 	for (unsigned r = 0; r < nbRows; r++)// For each rows
 	{
 		for (unsigned c = 0; c < nbCols; c++)// For each columns
 		{
-			matrixC.m_values[r][c] *= matrixB.m_values[r][c];// Sclalar product of matrixA and matrixB
+			matrixA.m_values[r][c] *= matrixB.m_values[r][c];// Sclalar product of matrixA and matrixB
 		}
 	}
 
-	return matrixC;
+	return matrixA;
 }
+
+template<class Type>
+inline Matrix<Type> Matrix<Type>::sample(unsigned coordinateX, unsigned coordinateY, size_t sampleWidth, size_t sampleHeight)
+{
+	assert(coordinateX + sampleWidth <= m_nbCols && coordinateY + sampleHeight <= m_nbRows && "Error in the function sample, the given coordinate and sample size are out of the matrix range");
+
+	Matrix<double> sample(sampleWidth, sampleHeight);
+
+	for (int r = 0; r < sampleHeight; r++)
+	{
+		for (int c = 0; c < sampleWidth; c++)
+		{
+			sample[r][c] = this->m_values[coordinateY + r][coordinateX + c];
+		}
+	}
+
+	return sample;
+}
+
 
