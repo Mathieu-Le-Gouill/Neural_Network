@@ -11,9 +11,9 @@
   The layers are linked by what we called weights. A given neuron in a layer is linked with each neurons in the previous layer.
   So that each neurons in a given layer affect all the following layers neurons depending of the weights impact.
      
-  https://www.houseofbots.com/images/news/2590/cover.png
+  ![Neural Network Layers](https://www.houseofbots.com/images/news/2590/cover.png)
      
-  Here is a link to get a better understanding of the neural network : [http://neuralnetworksanddeeplearning.com/chap1.html](http://neuralnetworksanddeeplearning.com/chap1.html)
+  Here is a link to get a better understanding of the neural network : http://neuralnetworksanddeeplearning.com/chap1.html
 
  ## How works a Neural Network ?
 
