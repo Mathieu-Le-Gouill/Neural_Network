@@ -1,5 +1,6 @@
 # Neural_Network
-*Here is some code of a C++ neural network
+#Here is some code of a C++ neural network
+  
   *What is an Artificial Neural Network ?
 
     -Artificial Neural Network is used in a particuliar domain of the machine learning : the deep learning.
