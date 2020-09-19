@@ -8,7 +8,7 @@
 
   The network is composed of layers, themselves composed of neurons.
   Each neurons has a threshold to be activated, it is represented by a value called the <b>bias</b>. 
-  It is composed of at least two layer, called respectively <b>input layer</b> and <b>output layer</b>.
+  The network is composed by at least two layers, called respectively <b>input layer</b> and <b>output layer</b>.
   If there is more than these two layers, they should be between the both and are called "hidden layers"
   The layers are linked by what we called <b>weights</b>. A given neuron in a layer is linked with each neurons in the previous layer.
   So that each neurons in a given layer affect all the following layers neurons depending of the weights impact.
