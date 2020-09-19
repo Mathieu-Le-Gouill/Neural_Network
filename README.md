@@ -1,5 +1,6 @@
 # Neural_Network
   
+  
   ## What is an Artificial Neural Network ?
 
   Artificial Neural Network is used in a particuliar domain of the machine learning : the deep learning.
@@ -15,16 +16,18 @@
      
   Here is a link to get a better understanding of the neural network : http://neuralnetworksanddeeplearning.com/chap1.html
 
+
+
  ## How works a Neural Network ?
 
   By processing data and the targeted output, the Neural Network use stochastic gradient descent to reduce how wrong the neural network's output is between its current result       and the targeted value. So that it can reduce the error it got at each new steps.
 
   It works in two different ways :
-       The Forward Propagation : 
-       ![Forward Propagation](https://images.deepai.org/django-summernote/2019-06-06/5c17d9c2-0ad4-474c-be8d-d6ae9b094e74.png)
-       Where it compute the network output by processing the given input in each layers each one depending of the former.
+  <li>The Forward Propagation : </li>
+  ![Forward Propagation](https://images.deepai.org/django-summernote/2019-06-06/5c17d9c2-0ad4-474c-be8d-d6ae9b094e74.png)
+  Where it compute the network output by processing the given input in each layers each one depending of the former.
        
-       The Back Propagation : 
-       ![Back Propagation](https://www.guru99.com/images/1/030819_0937_BackPropaga1.png)
-       Where it compute the loss gradient of each layers so that it can use the gradient descent latter on.
+  <li> The Back Propagation : </li>
+  ![Back Propagation](https://www.guru99.com/images/1/030819_0937_BackPropaga1.png)
+  Where it compute the loss gradient of each layers so that it can use the gradient descent latter on.
 
