@@ -11,14 +11,13 @@ using namespace std;
 
 int ReverseInt(int x);
 
-	vector<Matrix<double>> Load_MNIST_File(const string &MNIST_FilePath, int nbImages, int ImageDataSize)
-	//	:m_nbTrainingImages(NumberOfImages)
+	vector<Matrix<double>> Load_MNIST_File(const string &MNIST_FilePath, int nbImages, int ImageDataSize)// Function to obtain the data inputs of the images from the MNIST training file
 	{
-		//vector<vector<double> > inputsValues;
 		vector<Matrix<double>> inputsValues;
 		assert(ImageDataSize == 784);
 		assert(nbImages <= 60000);
-		//inputsValues.resize(nbImages, vector<double>(ImageDataSize));
+
+		inputsValues.reserve(nbImages);
 
 		ifstream file(MNIST_FilePath.c_str(), ios::binary);
 
@@ -67,13 +66,14 @@ int ReverseInt(int x);
 	}
 
 
-	vector<Matrix<double>> GetTargetValues(const string &LabelFilePath, int nbImages)
+	vector<Matrix<double>> GetTargetValues(const string &LabelFilePath, int nbImages)// Function to obtain the desired output for each images
 	{
 		vector<double> target;
 		vector<Matrix<double>> targetsValues;
-		//targetsValues.resize(nbImages, vector<double>(10));
 		ifstream file(LabelFilePath.c_str(), ios::binary);
 		assert(nbImages <= 60000);
+
+		targetsValues.reserve(nbImages);
 
 		if (file.is_open())
 		{
@@ -99,10 +99,8 @@ int ReverseInt(int x);
 				{
 					if (a == target.back())
 						values.push_back(1);
-					//targetsValues[i][a] = 1;
 					else
 						values.push_back(0);
-						//targetsValues[i][a] = 0;
 				}
 				targetsValues.back().add_a_Row(values);
 			}
