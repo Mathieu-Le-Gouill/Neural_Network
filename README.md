@@ -31,4 +31,4 @@
        
   <h3>The back propagation :</h3>
   <img src="https://www.guru99.com/images/1/030819_0937_BackPropaga1.png" width="50%" height="50%">
-  It compute the loss of the last layer, then propagate it using weights and biases to get the gradient of each layers so that we can use the gradient descent latter on.
+  It compute the loss of the last layer, then propagate it using weights and biases to get the gradient of each layers so that we can use it for the gradient descent latter on.
