@@ -15,7 +15,7 @@
      
   <img src="https://miro.medium.com/max/791/0*hzIQ5Fs-g8iBpVWq.jpg" width="50%" height="50%">
      
-  Here is a link to get a better understanding of the neural network : http://neuralnetworksanddeeplearning.com/chap1.html
+  Here is the link of my source to get a better understanding of an artificial neural network : http://neuralnetworksanddeeplearning.com/chap1.html
 
 
 
