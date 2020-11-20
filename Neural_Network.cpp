@@ -6,7 +6,6 @@
 
 using namespace std;
 
-
 Neural_Network::Neural_Network(const std::string& NeuralNetworkfileName, const double learningRate) : m_learningRate(learningRate)
 {
 	std::ifstream networkDataLoading;// File reader
@@ -34,57 +33,54 @@ Neural_Network::Neural_Network(const std::string& NeuralNetworkfileName, const d
 
 	for (unsigned l = 0; l < this->m_networktopology.size(); l++)// For each layer
 	{
-		this->m_outputs.push_back(Matrix<double>(this->m_networktopology[l]));// Add a matrix of neurons outputs
-		this->m_weights.push_back(Matrix<double>());// Add a matrix of weights
-		this->m_biases.push_back(Matrix<double>());// Add a matrix of biases
+		this->m_outputs.push_back(Matrix(this->m_networktopology[l], 1));// Add a matrix of neurons outputs
 
-		std::vector<double> biases;// Create a new array of bias in the layer
+		//- Set the weights values to randoms values
+		const unsigned nbInputs = (l == 0) ? 0 : networkTopology[l - 1];// Get the number of neurons in the previous layer
 
-		for (unsigned n = 0; n < this->m_networktopology[l]; n++)// For each neurons in the layer
+		this->m_weights.push_back(Matrix(networkTopology[l], nbInputs));// Add an empty matrix of neurons weights
+
+		if(l==0) this->m_biases.push_back(Matrix());// Add a matrix of biases
+
+		if (l != 0)// If this is not the first layer
 		{
-			if (l != 0)// If this is not the first layer
-			{
-				std::vector<double> weights;// Create a new array of weights in the layer
+			this->m_biases.push_back(Matrix(1, networkTopology[l]));// Add a matrix of biases
 
-				biases.push_back(networkBiases[nCounter]);// Add the bias value to the array
-				
+			for (unsigned n = 0; n < this->m_networktopology[l]; n++)// For each neurons in the layer
+			{
+				this->m_biases[l](0, n) = networkBiases[nCounter];
+
 				for (unsigned i = 0; i < this->m_networktopology[l - 1]; i++)// For each neurons in the previous layer
 				{
-					weights.push_back(networkWeights[wCounter]);// Set the neuron's weight value
-
+					this->m_weights[l](n, i) = networkWeights[wCounter];// Set the neuron's weight value
 					wCounter++;// Add one the the weights count
 				}
-				this->m_weights[l].add_a_Row(weights);// Set the bias value
-
 				nCounter++;// Add one the the biases count
 			}
 		}
-		if(!biases.empty())this->m_biases[l].add_a_Row(biases);// Set the neuron's bias value
 	}
 	this->m_errors = this->m_outputs;// Copy the matrix of outputs to the one of the errors
 	
 }
-
 
 Neural_Network::Neural_Network(std::vector<unsigned short> networkTopology, const double learningRate) : m_learningRate(learningRate)// Constructor
 {
 	assert(networkTopology.size() >= 2 && "Error : the given network topology require a size greater than 2, for an input layer and an output layer.");// Be sure that the network topology have more than two layers
 
 	m_networktopology = networkTopology;
-	const unsigned &nbLayers = networkTopology.size();
+	const unsigned& nbLayers = networkTopology.size();
 
 	for (unsigned l = 0; l < nbLayers; l++)// For each layers of the network
 	{
-		this->m_outputs.push_back(Matrix<double>(networkTopology[l]));// Add a matrix of neurons outputs
-		this->m_weights.push_back(Matrix<double>());// Add an empty matrix of neurons weights
+		this->m_outputs.push_back(Matrix(1, networkTopology[l]));// Add a matrix of neurons outputs
 
 		//- Set the weights values to randoms values
 		const unsigned nbInputs = (l == 0) ? 0 : networkTopology[l - 1];// Get the number of neurons in the previous layer
 
+		this->m_weights.push_back(Matrix(networkTopology[l], nbInputs));// Add an empty matrix of neurons weights
+
 		for (int n = 0; n < (int)networkTopology[l]; n++)// For each neurons of the layer
 		{
-			vector<double> neuron_weights;// Create a n empty array of weights for the neuron
-
 			unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();// To get differents epochs 
 			std::default_random_engine generator(seed);// Create a generator of random numbers
 			std::normal_distribution<double> distribution(0, 1);// Create a method of distribution of mean 0 and variance 1
@@ -92,15 +88,12 @@ Neural_Network::Neural_Network(std::vector<unsigned short> networkTopology, cons
 			for (int i = 0; i < (int)nbInputs; i++)// For each neuron's inputs
 			{
 				double randomValue = distribution(generator);// Generate a random number by the generator using the distribution
-				neuron_weights.push_back((double)(randomValue*sqrt(2.0 / nbInputs)));// Set neuron's weights using RELU
+				this->m_weights[l](n,i) = (randomValue * sqrt(2.0 / nbInputs));// Set neuron's weights using RELU
 			}
-
-			if(!neuron_weights.empty())	 m_weights.back().add_a_Row(neuron_weights);// Add weights to the neuron for each neurons inputs
 		}
 	}
 	this->m_biases = this->m_errors = this->m_outputs;// Set the biases and the erros matrices
-	this->m_biases.front() = Matrix<double>();// Remove the first layer biases because they won't be used
-
+	this->m_biases[0] = Matrix();
 }
 
 
@@ -109,9 +102,9 @@ Neural_Network::~Neural_Network()// Destructor
 }
 
 
-void Neural_Network::FeedForward(const Matrix<double> &inputsValues)// Method to update the totality of the network according to the inputsValues
+void Neural_Network::FeedForward(const Matrix &inputsValues)// Method to update the totality of the network according to the inputsValues
 {
-	assert(inputsValues.size() == m_networktopology[0] && inputsValues.rows() == 1 && "Error : the inputsValues array in the feedforward method must have the same size than the network toplogy's inputs layer");// Be sure that the number of inputs values size still the same than the network topology first layer
+	assert(inputsValues.cols() == m_networktopology[0] && inputsValues.rows() == 1 && "Error : the inputsValues array in the feedforward method must have the same size than the network toplogy's inputs layer");// Be sure that the number of inputs values size still the same than the network topology first layer
 
 	//- Set the inputs values to the first layer of the network
 	this->m_outputs[0] = inputsValues;// Set the inputs values into the first layer output
@@ -119,22 +112,20 @@ void Neural_Network::FeedForward(const Matrix<double> &inputsValues)// Method to
 	//- Feed the other layers according to the inputs values
 	for (unsigned l = 1; l < this->m_networktopology.size(); l++)// For each layers except the first
 	{
-		Matrix<double> Z = this->m_weights[l] * this->m_outputs[l - 1].transpose() + this->m_biases[l].transpose();
+		Matrix Z = this->m_weights[l] * this->m_outputs[l - 1].transpose() + this->m_biases[l].transpose();
 		this->m_outputs[l] = Sigmoid(Z).transpose();// Feed the output layer using weights and biases
 	}
 
 	//-To print the handwritten digits inputs from the MNIST file
-		//for (int r=0; r < 28; r++){for (int c = 0; c < 28; c++)	cout << round(this->m_outputs[0][0][r * 28 + c])<<" ";	  cout << "" << endl;}
+		//for (int r=0; r < 28; r++){for (int c = 0; c < 28; c++)	cout << round(this->m_outputs[0](0, r * 28 + c))<<" ";	  cout << "" << endl;}
 }
 
 
-void Neural_Network::BackPropagate(const Matrix<double> &targetsValues)// Method to propagate the error obtained in the ouput layer to the hiddens
+void Neural_Network::BackPropagate(const Matrix &targetsValues)// Method to propagate the error obtained in the ouput layer to the hiddens
 {
-	assert(targetsValues.size() == this->m_networktopology.back());// Be sure that the number of targets values still the same than the network topology last layer
+	assert(targetsValues.cols() == this->m_networktopology.back() && targetsValues.rows() == 1 && "Error : the targetValues array in the BackPropagate method must have the same size than the network toplogy's last layer");
 
-	//- Compute the output error between the outputs values in the last layer and the targets values
-
-	Matrix<double> value(this->m_networktopology.back(), 1, 1);// Create a matrix of the neuron number in the last layer * 1, full of value equal to 1
+	Matrix value(1, this->m_networktopology.back(), 1.0);// Create a matrix of the neuron number in the last layer * 1, full of value equal to 1.0
 
 	//- Compute the error in the last layer
 	this->m_errors.back() = (this->m_outputs.back() - targetsValues).scalar(this->m_outputs.back().scalar(value - this->m_outputs.back()));
@@ -143,7 +134,7 @@ void Neural_Network::BackPropagate(const Matrix<double> &targetsValues)// Method
 	//- Propagate the outputs errors from the last layer to the hiddens layers 
 	for (int l = this->m_networktopology.size() - 2; l > 0; l--)// For each hiddens layers (excluding the output layer and the input layer)
 	{
-		value = Matrix<double>(this->m_networktopology[l], 1, 1);// Create a matrix of the neuron number in the layer * 1, full of value equal to 1
+		value = Matrix(1, this->m_networktopology[l], 1.0);// Create a matrix of the neuron number in the layer * 1, full of value equal to 1
 
 		this->m_errors[l] = (this->m_errors[l + 1] * this->m_weights[l + 1]).scalar(this->m_outputs[l].scalar(value - this->m_outputs[l]));// Backpropagate the error in the network using ouput error, weights and outputs
 	}
@@ -155,8 +146,8 @@ void Neural_Network::Update()// Method to update the network according to the er
 	//- Update the weights and biases by computing gradients for each them
 	for (unsigned l = 1; l < this->m_networktopology.size(); l++)// For each layers except the first
 	{
-		const Matrix<double> weightsGradient = this->m_errors[l].transpose() * this->m_outputs[l - 1];// Compute the weights gradients : same that (this->m_outputs[l - 1].transpose() * this->m_errors[l]).transpose()
-		const Matrix<double> biasesGradient = this->m_errors[l];// Compute the biases gradients
+		const Matrix weightsGradient = this->m_errors[l].transpose() * this->m_outputs[l - 1];// Compute the weights gradients : same that (this->m_outputs[l - 1].transpose() * this->m_errors[l]).transpose()
+		const Matrix biasesGradient = this->m_errors[l];// Compute the biases gradients
 
 		this->m_weights[l] -= weightsGradient * m_learningRate;// Update weights values
 		this->m_biases[l] -= biasesGradient * m_learningRate; // Update biases values
@@ -188,7 +179,7 @@ void Neural_Network::SaveData(const std::string &fileName)// Method to save the 
 			if(!this->m_weights[l].empty())
 			for (unsigned n = 0; n < this->m_networktopology[l]; n++)
 				for (unsigned i = 0; i < this->m_networktopology[l - 1]; i++)
-					networkDataSaving << " " << this->m_weights[l][n][i];
+					networkDataSaving << " " << this->m_weights[l](n, i);
 		networkDataSaving << "\n" << std::endl;
 
 
@@ -196,7 +187,7 @@ void Neural_Network::SaveData(const std::string &fileName)// Method to save the 
 		for (unsigned l = 0; l < this->m_networktopology.size(); l++)
 			if (!this->m_biases[l].empty())
 				for (unsigned n = 0; n < this->m_networktopology[l]; n++)
-					networkDataSaving << " " << this->m_biases[l][0][n];
+					networkDataSaving << " " << this->m_biases[l](0,n);
 		networkDataSaving << "\n" << std::endl;
 	}
 	else // If it failed to open
@@ -205,13 +196,13 @@ void Neural_Network::SaveData(const std::string &fileName)// Method to save the 
 }
 
 
-Matrix<double> Neural_Network::Sigmoid(Matrix<double> &matrix)// Sigmoid function for matrix
+Matrix Neural_Network::Sigmoid(Matrix &matrix)// Sigmoid function for matrix
 {
 	for (unsigned r = 0; r < matrix.rows(); r++)
 	{
-		for (unsigned c = 0; c < matrix.columns(); c++)
+		for (unsigned c = 0; c < matrix.cols(); c++)
 		{
-			matrix[r][c] = 1 / (1 + exp(-matrix[r][c]));// Compute the matrix sigmoid
+			matrix(r,c) = 1 / (1 + exp(-matrix(r,c)));// Compute the matrix sigmoid
 		}
 	}
 	return matrix;

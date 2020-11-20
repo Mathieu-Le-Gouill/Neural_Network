@@ -11,9 +11,9 @@ using namespace std;
 
 int ReverseInt(int x);
 
-	vector<Matrix<double>> Load_MNIST_File(const string &MNIST_FilePath, int nbImages, int ImageDataSize)// Function to obtain the data inputs of the images from the MNIST training file
+	vector<Matrix> Load_MNIST_File(const string &MNIST_FilePath, int nbImages, int ImageDataSize)// Function to obtain the data inputs of the images from the MNIST training file
 	{
-		vector<Matrix<double>> inputsValues;
+		vector<Matrix> inputsValues;
 		assert(ImageDataSize == 784);
 		assert(nbImages <= 60000);
 
@@ -42,8 +42,7 @@ int ReverseInt(int x);
 
 			for (int i = 0; i < nbImages; ++i)
 			{
-				inputsValues.push_back(Matrix<double >());
-				vector<double> values;
+				inputsValues.push_back(Matrix(1, n_rows*n_cols));
 
 				for (int r = 0; r < n_rows; ++r)
 				{
@@ -52,11 +51,10 @@ int ReverseInt(int x);
 					{
 						unsigned char temp = 0;
 						file.read((char*)&temp, sizeof(temp));
-						values.push_back((double)temp / 255.0);
+						inputsValues.back()(0, r*c+c) = (double)temp / 255.0;
 					}
 					
 				}
-				inputsValues.back().add_a_Row(values);
 			}
 		}
 		else
@@ -66,10 +64,10 @@ int ReverseInt(int x);
 	}
 
 
-	vector<Matrix<double>> GetTargetValues(const string &LabelFilePath, int nbImages)// Function to obtain the desired output for each images
+	vector<Matrix> GetTargetValues(const string &LabelFilePath, int nbImages)// Function to obtain the desired output for each images
 	{
 		vector<double> target;
-		vector<Matrix<double>> targetsValues;
+		vector<Matrix> targetsValues;
 		ifstream file(LabelFilePath.c_str(), ios::binary);
 		assert(nbImages <= 60000);
 
@@ -88,21 +86,13 @@ int ReverseInt(int x);
 
 			for (int i = 0; i < nbImages; ++i)
 			{
-				targetsValues.push_back(Matrix<double>());
-				vector<double> values;
+				targetsValues.push_back(Matrix(1, 10));
 
 				unsigned char temp = 0;
 				file.read((char*)&temp, sizeof(temp));
 				target.push_back((double)temp);
 
-				for (int a = 0; a < 10; a++)
-				{
-					if (a == target.back())
-						values.push_back(1);
-					else
-						values.push_back(0);
-				}
-				targetsValues.back().add_a_Row(values);
+				targetsValues.back()(0, target.back()) = 1.0;
 			}
 		}
 		else
