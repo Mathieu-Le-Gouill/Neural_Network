@@ -51,7 +51,7 @@ int ReverseInt(int x);
 					{
 						unsigned char temp = 0;
 						file.read((char*)&temp, sizeof(temp));
-						inputsValues.back()(0, r*c+c) = (double)temp / 255.0;
+						inputsValues.back()(0, r*n_cols+c) = (double)temp / 255.0;
 					}
 					
 				}
