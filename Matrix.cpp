@@ -142,7 +142,7 @@ Matrix Matrix::transpose() const
 			result.m_values[r][c] = this->m_values[c][r];
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 
@@ -164,7 +164,7 @@ Matrix Matrix::scalar(const Matrix& matrix) const
 		}
 	}
 
-	return result;
+	return std::move(result);
 }
 
 double& Matrix::operator()(unsigned row, unsigned column)
@@ -206,7 +206,7 @@ Matrix Matrix::operator/(double value) const
 			result.m_values[r][c] /= value;
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 
@@ -224,7 +224,7 @@ Matrix Matrix::operator^(double value) const
 			result.m_values[r][c] = pow(this->m_values[r][c], value);
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 
@@ -248,7 +248,7 @@ Matrix Matrix::operator+(const Matrix& matrix) const
 		}
 	}
 
-	return result;
+	return std::move(result);
 }
 
 
@@ -272,7 +272,7 @@ Matrix Matrix::operator-(const Matrix& matrix) const
 		}
 	}
 
-	return result;
+	return std::move(result);
 }
 
 
@@ -308,7 +308,7 @@ Matrix Matrix::operator*(const Matrix& matrix) const
 	}
 	matrixC.m_values = values;
 
-	return matrixC;
+	return std::move(matrixC);
 }
 
 
