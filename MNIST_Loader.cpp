@@ -11,10 +11,9 @@ using namespace std;
 
 int ReverseInt(int x);
 
-	vector<Matrix> Load_MNIST_File(const string &MNIST_FilePath, int nbImages, int ImageDataSize)// Function to obtain the data inputs of the images from the MNIST training file
+	vector<Matrix> Load_MNIST_File(const string &MNIST_FilePath, int nbImages)// Function to obtain the data inputs of the images from the MNIST training file
 	{
 		vector<Matrix> inputsValues;
-		assert(ImageDataSize == 784);
 		assert(nbImages <= 60000);
 
 		inputsValues.reserve(nbImages);
