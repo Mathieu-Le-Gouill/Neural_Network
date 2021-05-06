@@ -23,8 +23,8 @@ int main()
 	vector<unsigned short> networkTopology
 	{ nbDataImage, 20, 10 };
 
-	vector<Matrix> inputsValues = Load_MNIST_File("train-images.idx3-ubyte", nbTrainingsImages, nbDataImage);// t10k-images.idx3-ubyte OR train-images.idx3-ubyte
-	vector<Matrix> targetsValues = GetTargetValues("train-labels.idx1-ubyte", nbTrainingsImages);// t10k-labels.idx1-ubyte OR train-labels.idx1-ubyte
+	vector<Matrix> inputsValues = Load_MNIST_File("t10k-images.idx3-ubyte", nbTrainingsImages, nbDataImage);// t10k-images.idx3-ubyte OR train-images.idx3-ubyte
+	vector<Matrix> targetsValues = GetTargetValues("t10k-labels.idx1-ubyte", nbTrainingsImages);// t10k-labels.idx1-ubyte OR train-labels.idx1-ubyte
 
 	Neural_Network net(networkTopology, learningRate);
 
