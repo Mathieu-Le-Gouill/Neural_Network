@@ -14,7 +14,7 @@ const unsigned nbTrainingsImages = nbEpochs;// 60 000 max
 //VARIABLES
 
 //FUNCTIONS DECLARATIONS
-vector<Matrix> Load_MNIST_File(const string& MNIST_FilePath, int nbImages, int ImageDataSize);// Function to obtain the data inputs of the images from the MNIST training file
+vector<Matrix> Load_MNIST_File(const string& MNIST_FilePath, int nbImages);// Function to obtain the data inputs of the images from the MNIST training file
 vector<Matrix> GetTargetValues(const string& LabelFilePath, int nbImages);// Function to obtain the desired output for each images
 //FUNCTIONS DECLARATIONS
 
@@ -23,7 +23,7 @@ int main()
 	vector<unsigned short> networkTopology
 	{ nbDataImage, 20, 10 };
 
-	vector<Matrix> inputsValues = Load_MNIST_File("t10k-images.idx3-ubyte", nbTrainingsImages, nbDataImage);// t10k-images.idx3-ubyte OR train-images.idx3-ubyte
+	vector<Matrix> inputsValues = Load_MNIST_File("t10k-images.idx3-ubyte", nbTrainingsImages);// t10k-images.idx3-ubyte OR train-images.idx3-ubyte
 	vector<Matrix> targetsValues = GetTargetValues("t10k-labels.idx1-ubyte", nbTrainingsImages);// t10k-labels.idx1-ubyte OR train-labels.idx1-ubyte
 
 	Neural_Network net(networkTopology, learningRate);
