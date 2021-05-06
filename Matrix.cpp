@@ -188,7 +188,7 @@ Matrix Matrix::operator*(double value) const
 			result.m_values[r][c] *= value;
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 
