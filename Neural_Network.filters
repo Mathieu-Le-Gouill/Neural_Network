@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Fichiers de ressources">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Data_Structures">
+      <UniqueIdentifier>{84161813-62a3-45cd-a81a-48f7de9eb8ee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Data_Structures\Headers">
+      <UniqueIdentifier>{45bf7fed-6fdd-4dc9-8108-13cbbfc4c018}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Data_Structures\Sources">
+      <UniqueIdentifier>{231099de-c484-4850-aae5-e09c17672c44}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Layers">
+      <UniqueIdentifier>{078406ca-a2d2-4211-9204-e5e40544167a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Layers\Activation_Functions">
+      <UniqueIdentifier>{b0b1afbf-fe9e-4ca0-8e6f-d0a1b1ef647a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Layers\Activation_Functions\Headers">
+      <UniqueIdentifier>{ae1f1920-e188-4a90-b66d-db4203378a0e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Layers\Activation_Functions\Sources">
+      <UniqueIdentifier>{6c2c5b1f-faf4-4390-86c3-c12874ded511}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Debug">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Sources">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sigmoid.cpp">
+      <Filter>Layers\Activation_Functions\Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="MatrixF.cpp">
+      <Filter>Data_Structures\Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Tensor.cpp">
+      <Filter>Data_Structures\Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="MNIST_Loader.cpp">
+      <Filter>Fichiers de ressources</Filter>
+    </ClCompile>
+    <ClCompile Include="Fully_Connected_Layer.cpp">
+      <Filter>Layers</Filter>
+    </ClCompile>
+    <ClCompile Include="Softmax_Layer.cpp">
+      <Filter>Layers</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="debug.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="Sigmoid.h">
+      <Filter>Layers\Activation_Functions\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="Activation_Function.h">
+      <Filter>Layers\Activation_Functions\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="MatrixF.h">
+      <Filter>Data_Structures\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="Tensor.h">
+      <Filter>Data_Structures\Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="Fully_Connected_Layer.h">
+      <Filter>Layers</Filter>
+    </ClInclude>
+    <ClInclude Include="Softmax_Layer.h">
+      <Filter>Layers</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

@@ -3,20 +3,19 @@
 #include <string>
 #include <sstream>
 #include <fstream>
-#include <assert.h>
-#include "Matrix.h"
+#include "debug.h"
+#include "MatrixF.h"
 
 using namespace std;
 
 
 int ReverseInt(int x);
 
-	vector<Matrix> Load_MNIST_File(const string &MNIST_FilePath, int nbImages)// Function to obtain the data inputs of the images from the MNIST training file
+	MatrixF* Load_MNIST_File(const string &MNIST_FilePath, unsigned nbImages)// Function to obtain the data inputs of the images from the MNIST training file
 	{
-		vector<Matrix> inputsValues;
-		assert(nbImages <= 60000);
+		debug_assert(nbImages <= 60000);
 
-		inputsValues.reserve(nbImages);
+		MatrixF* inputsValues = new MatrixF[nbImages];
 
 		ifstream file(MNIST_FilePath.c_str(), ios::binary);
 
@@ -39,9 +38,9 @@ int ReverseInt(int x);
 			file.read((char*)&n_cols, sizeof(n_cols));
 			n_cols = ReverseInt(n_cols);
 
-			for (int i = 0; i < nbImages; ++i)
+			for (unsigned i = 0; i < nbImages; ++i)
 			{
-				inputsValues.push_back(Matrix(1, n_rows*n_cols));
+				inputsValues[i] = MatrixF(1, n_rows*n_cols);
 
 				for (int r = 0; r < n_rows; ++r)
 				{
@@ -50,7 +49,7 @@ int ReverseInt(int x);
 					{
 						unsigned char temp = 0;
 						file.read((char*)&temp, sizeof(temp));
-						inputsValues.back()(0, r*n_cols+c) = (double)temp / 255.0;
+						inputsValues[i](0, r*n_cols+c) = (float)temp / 255.f;
 					}
 					
 				}
@@ -63,14 +62,11 @@ int ReverseInt(int x);
 	}
 
 
-	vector<Matrix> GetTargetValues(const string &LabelFilePath, int nbImages)// Function to obtain the desired output for each images
+	MatrixF* GetTargetValues(const string &LabelFilePath, unsigned nbImages)// Function to obtain the desired output for each images
 	{
-		vector<double> target;
-		vector<Matrix> targetsValues;
+		MatrixF* targetsValues = new MatrixF[nbImages];
 		ifstream file(LabelFilePath.c_str(), ios::binary);
-		assert(nbImages <= 60000);
-
-		targetsValues.reserve(nbImages);
+		debug_assert(nbImages <= 60000);
 
 		if (file.is_open())
 		{
@@ -83,15 +79,14 @@ int ReverseInt(int x);
 			file.read((char*)&number_of_images, sizeof(number_of_images));
 			number_of_images = ReverseInt(number_of_images);
 
-			for (int i = 0; i < nbImages; ++i)
+			for (unsigned i = 0; i < nbImages; ++i)
 			{
-				targetsValues.push_back(Matrix(1, 10));
+				targetsValues[i] = MatrixF(1, 10, 0.f);
 
 				unsigned char temp = 0;
 				file.read((char*)&temp, sizeof(temp));
-				target.push_back((double)temp);
 
-				targetsValues.back()(0, target.back()) = 1.0;
+				targetsValues[i](0, (uint16_t)temp) = 1.0;
 			}
 		}
 		else
@@ -99,7 +94,6 @@ int ReverseInt(int x);
 
 		return targetsValues;
 	}
-
 
 
 	int ReverseInt(int x)

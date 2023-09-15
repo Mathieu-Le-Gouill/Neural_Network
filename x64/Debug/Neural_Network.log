@@ -1,0 +1,9 @@
+﻿  Fully_Connected_Layer.cpp
+C:\Users\mathi\source\repos\Neural_Network\Fully_Connected_Layer.cpp(52,63): warning C4305: 'argument' : troncation de 'double' à 'const float'
+  main.cpp
+C:\Users\mathi\source\repos\Neural_Network\main.cpp(145,10): warning C4129: 'C' : caractère de séquence d'échappement non reconnu
+  MatrixF.cpp
+  MNIST_Loader.cpp
+  Softmax_Layer.cpp
+  Génération de code en cours...
+  Neural_Network.vcxproj -> C:\Users\mathi\source\repos\Neural_Network\x64\Debug\Neural_Network.exe
