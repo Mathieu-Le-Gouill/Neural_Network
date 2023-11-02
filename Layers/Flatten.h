@@ -1,10 +1,10 @@
 #pragma once
-#include "Layers/Layer.h"
+#include "Layer.h"
 
-template <size_t... inputDims>
+template <::std::size_t... inputDims>
 class Flatten : public Layer< Tensor<inputDims...>, Tensor<(1 * ... * inputDims)>>
 {
-    static constexpr size_t outputSize = (1 * ... * inputDims);
+    static constexpr ::std::size_t outputSize = (1 * ... * inputDims);
 
     using inputType = Tensor<inputDims...>;
     using outputType = Tensor<outputSize>;
@@ -21,5 +21,9 @@ public:
     inputType Backward(outputType& input) override
     {
         return input.reshape<inputDims...>();
+    }
+
+    void Update() override
+    {
     }
 };

@@ -9,5 +9,7 @@ public:
     virtual output Forward(input& tensor) = 0;
 
     virtual input Backward(output& tensor) = 0;
+
+    virtual void Update() = 0;
 };
 

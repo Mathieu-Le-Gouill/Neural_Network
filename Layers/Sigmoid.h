@@ -2,31 +2,35 @@
 #include "Layer.h"
 
 template <::std::size_t... inputDims>
-class ReLu : public Layer< Tensor<inputDims...>, Tensor<inputDims...>>
+class Sigmoid : public Layer< Tensor<inputDims...>, Tensor<inputDims...>>
 {
     using inputType = Tensor<inputDims...>;
     using outputType = Tensor<inputDims...>;
 
 public:
 
-    constexpr ReLu() {}
+    constexpr Sigmoid() {}
 
     outputType Forward(inputType& input) override
     {
-        input.apply_ReLu();
+        input.apply_sigmoid();
+        _output = input;
 
         return std::move(input);
     }
 
     inputType Backward(outputType& input) override
     {
-        input.apply_ReLu_derivative();
+        input *= _output * (ones<inputDims...>() - _output);
 
         return std::move(input);
     }
 
     void Update() override
     {
-	}
+    }
+
+private :
+	outputType _output;
 
 };

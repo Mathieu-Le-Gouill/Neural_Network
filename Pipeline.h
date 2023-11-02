@@ -1,70 +1,73 @@
 #pragma once
 #include "Layers/Layer.h"
+#include "Layers/Conv.h"
+#include "Layers/ReLu.h"
+#include "Layers/Dense.h"
+#include "Layers/Flatten.h"
+#include "Layers/Norm.h"
+#include "Layers/Sigmoid.h"
+
 #include <utility>
 #include <type_traits>
 
-template <std::size_t ... Is>
-constexpr auto indexSequenceReverse(std::index_sequence<Is...> const&)
--> decltype(std::index_sequence<sizeof...(Is) - 1U - Is...>{});
 
 
-template <std::size_t N>
+template <::std::size_t ... Is>
+constexpr auto indexSequenceReverse(::std::index_sequence<Is...> const&)
+-> decltype(::std::index_sequence<sizeof...(Is) - 1U - Is...>{});
+
+
+template <::std::size_t N>
 using makeIndexSequenceReverse
-= decltype(indexSequenceReverse(std::make_index_sequence<N>{}));
+= decltype(indexSequenceReverse(::std::make_index_sequence<N>{}));
 
 
 template <typename... Layers>
 class Pipeline {
 public:
-	template <size_t... Dims>
+
+	template <::std::size_t... Dims>
 	auto forward(Tensor<Dims...>& input) {
-		return forwardHelper(input, std::index_sequence_for<Layers...>());
+		return proccessLayers(input, std::index_sequence_for<Layers...>(), [](auto&& layer, auto&& data) {
+			return layer.Forward(std::forward<decltype(data)>(data));
+		});
 	}
 
-	template <size_t... Dims>
+	template <::std::size_t... Dims>
 	auto forward(Tensor<Dims...>&& input) {
-		return forwardHelper(input, std::index_sequence_for<Layers...>());
+		return proccessLayers(input, std::index_sequence_for<Layers...>(), [](auto&& layer, auto&& data) {
+			return layer.Forward(std::forward<decltype(data)>(data));
+		});
 	}
 
 
-	template <size_t... Dims>
+	template <::std::size_t... Dims>
 	auto backward(Tensor<Dims...>& input) {
-		return backwardHelper(input, makeIndexSequenceReverse<sizeof...(Layers)>());
+		return proccessLayers(input, makeIndexSequenceReverse<sizeof...(Layers)>(), [](auto&& layer, auto&& data) {
+			return layer.Backward(std::forward<decltype(data)>(data));
+		});
 	}
 
-	template <size_t... Dims>
+	template <::std::size_t... Dims>
 	auto backward(Tensor<Dims...>&& input) {
-		return backwardHelper(input, makeIndexSequenceReverse<sizeof...(Layers)>());
+		return proccessLayers(input, makeIndexSequenceReverse<sizeof...(Layers)>(), [](auto&& layer, auto&& data) {
+			return layer.Backward(std::forward<decltype(data)>(data));
+		});
 	}
 
 private:
-	template <size_t... Dims, size_t Index, size_t... Rest>
-	auto forwardHelper(Tensor<Dims...>& input, std::index_sequence<Index, Rest...> ) {
-		// Forward the input through the current layer
-		auto output = std::get<Index>(layers).Forward(input);
-
-		// Continue the forward pass with the rest of the layers
-		return forwardHelper(output, std::index_sequence<Rest...>());
-	}
-
-	template <size_t... Dims>
-	auto forwardHelper(Tensor<Dims...>& input, std::index_sequence<>) {
-		// When there are no more layers, return the final output
-		return input;
-	}
-
 	
-	template <size_t... Dims, size_t Index, size_t... Rest>
-	auto backwardHelper(Tensor<Dims...>& input, std::index_sequence<Index, Rest...>) {
+	template <::std::size_t... Dims, size_t Index, typename Func, size_t... Rest>
+	auto proccessLayers(Tensor<Dims...>& input, std::index_sequence<Index, Rest...>, Func&& func) {
 		// Forward the input through the current layer
-		auto output = std::get<Index>(layers).Backward(input);
+		auto output = func(std::get<Index>(layers), input);
 
 		// Continue the forward pass with the rest of the layers
-		return backwardHelper(output, index_sequence<Rest...>());
+		return proccessLayers(output, index_sequence<Rest...>(), func);
 	}
 
-	template <size_t... Dims>
-	auto backwardHelper(Tensor<Dims...>& input, std::index_sequence<>) {
+	template <::std::size_t... Dims, typename Func>
+	auto proccessLayers(Tensor<Dims...>& input, std::index_sequence<>, Func&& func) {
 		// When there are no more layers, return the final output
 		return input;
 	}

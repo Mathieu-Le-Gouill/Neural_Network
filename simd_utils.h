@@ -14,6 +14,7 @@
 // TODO PACKAGE_M512
 #ifdef PACKAGE_M512
 	#define PACKAGE_TYPE __m512
+	#define _MASKZ_MOV(x,y) _mm512_maskz_mov_ps(x,y)
 
 #elif defined PACKAGE_M256
 	#define PACKAGE_TYPE __m256
@@ -33,12 +34,15 @@
 	#define _LOAD(x) _mm256_load_ps(x)
 	#define _STORE(x,y) _mm256_store_ps(x,y)
 	#define _FMADD(x,y,z) _mm256_fmadd_ps(x,y,z)
+	#define _FMSUB(x,y,z) _mm256_fmsub_ps(x,y,z)
 	#define _MAX(x,y) _mm256_max_ps(x,y)
-	#define _MASKZ_MOV(x,y) _mm256_maskz_mov_ps(x,y)
-	#define _CASTSI(x) _mm256_castsi256_ps(x)
+	#define _CASTSI_PS(x) _mm256_castsi256_ps(x)
+	#define _CASTPS_SI(x) _mm256_castps_si256(x)
 	#define _SET1_EPI32(x) _mm256_set1_epi32(x)
 	#define _AND(x,y) _mm256_and_ps(x,y)
+	#define _ANDSI(x,y) _mm256_and_si256(x,y)
 	#define _MASKLOAD(x,y) _mm256_maskload_ps(x,y)
+	#define _RCP(x) _mm256_rcp_ps(x)
 	#define _MASKSTORE(x,y,z) _mm256_maskstore_ps(x,y,z)
 
 #else
@@ -59,11 +63,13 @@
 	#define _LOAD(x) _mm_load_ps(x)
 	#define _STORE(x,y) _mm_store_ps(x,y)
 	#define _FMADD(x,y,z) _mm_fmadd_ps(x,y,z)
+	#define _FMSUB(x,y,z) _mm_fmsub_ps(x,y,z)
 	#define _MAX(x,y) _mm_max_ps(x,y)
-	#define _MASKZ_MOV(x,y) _mm_maskz_mov_ps(x,y)
 	#define _CASTSI(x) _mm_castsi128_ps(x)
 	#define _SET1_EPI32(x) _mm_set1_epi32(x)
 	#define _AND(x,y) _mm_and_ps(x,y)
+	#define _ADDSI(x,y) _mm_and_si128(x,y)
+	#define _RCP(x) _mm_rcp_ps(x)
 	#define _MASKLOAD(x,y) _mm_maskload_ps(x,y)
 	#define _MASKSTORE(x,y) _mm_maskstore_ps(x,y)
 #endif
