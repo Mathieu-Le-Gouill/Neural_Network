@@ -176,22 +176,13 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(const Tensor<Di
 {
     Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE* iterA = this->_values;
-    const PACKAGE_TYPE* iterB = tensor._values;
-
-    PACKAGE_TYPE* iterO = output._values;
-
-    while (iterO < output._end)
+    for(size_t i = 0; i < _numPackages; ++i)
     {
-        *iterO = _ADD(*iterA, *iterB);
-
-        ++iterA;
-        ++iterB;
-        ++iterO;
+	output._values[i] = _ADD(this->_values[i], tensor._values[i]);
     }
 
     if constexpr (_offset)
-        _MASKSTORE((float*)iterO, remainderMask<_offset>(), _ADD(*iterA, *iterB));
+        _MASKSTORE(output._values + _numPackages, remainderMask<_offset>(), _ADD(this->_values[_numPackages], tensor._values[_numPackages]));
 
     return output;
 }
