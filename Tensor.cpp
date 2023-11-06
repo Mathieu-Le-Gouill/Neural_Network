@@ -194,22 +194,13 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(const Tensor<Di
 {
     Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE* iterA = this->_values;
-    const PACKAGE_TYPE* iterB = tensor._values;
-
-    PACKAGE_TYPE* iterO = output._values;
-
-    while (iterO < output._end)
+    for(size_t i = 0; i < _numPackages; ++i)
     {
-        *iterO = _SUB(*iterA, *iterB);
-
-        ++iterA;
-        ++iterB;
-        ++iterO;
+	output._values[i] = _SUB(this->_values[i], tensor._values[i]);
     }
 
     if constexpr (_offset)
-        _MASKSTORE((float*)iterO, remainderMask<_offset>(), _SUB(*iterA, *iterB));
+        _MASKSTORE(output._values + _numPackages, remainderMask<_offset>(), _SUB(this->_values[_numPackages], tensor._values[_numPackages]));
 
     return output;
 }
@@ -220,23 +211,13 @@ template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(const Tensor<Dimensions...>& tensor)
 {
     Tensor<Dimensions...> output;
-
-    const PACKAGE_TYPE* iterA = this->_values;
-    const PACKAGE_TYPE* iterB = tensor._values;
-
-    PACKAGE_TYPE* iterO = output._values;
-
-    while (iterO < output._end)
+    for(size_t i = 0; i < _numPackages; ++i)
     {
-        *iterO = _MUL(*iterA, *iterB);
-
-        ++iterA;
-        ++iterB;
-        ++iterO;
+	output._values[i] = _MUL(this->_values[i], tensor._values[i]);
     }
 
     if constexpr (_offset)
-        _MASKSTORE((float*)iterO, remainderMask<_offset>(), _MUL(*iterA, *iterB));
+        _MASKSTORE(output._values + _numPackages, remainderMask<_offset>(), _MUL(this->_values[_numPackages], tensor._values[_numPackages]));
 
     return output;
 }
@@ -247,23 +228,14 @@ template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(const Tensor<Dimensions...>& tensor)
 {
     Tensor<Dimensions...> output;
-
-    const PACKAGE_TYPE* iterA = this->_values;
-    const PACKAGE_TYPE* iterB = tensor._values;
-
-    PACKAGE_TYPE* iterO = output._values;
-
-    while (iterO < output._end)
+	
+    for(size_t i = 0; i < _numPackages; ++i)
     {
-        *iterO = _DIV(*iterA, *iterB);
-
-        ++iterA;
-        ++iterB;
-        ++iterO;
+	output._values[i] = _DIV(this->_values[i], tensor._values[i]);
     }
 
     if constexpr (_offset)
-        _MASKSTORE((float*)iterO, remainderMask<_offset>(), _DIV(*iterA, *iterB));
+        _MASKSTORE(output._values + _numPackages, remainderMask<_offset>(), _DIV(this->_values[_numPackages], tensor._values[_numPackages]));
 
     return output;
 }
