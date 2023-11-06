@@ -16,8 +16,8 @@ class Tensor {
     // The number of elements which cannot fit in a package
     static constexpr uint16_t _offset = _size % PACKAGE_LENGTH;
 
-    // The number of packages needed to store the tensor including the offset elements
-    static constexpr ::std::size_t _numPackages = _size / PACKAGE_LENGTH;
+    // The number of packages needed to store the tensor the offset elements excluded
+    static constexpr ::std::size_t _numPackages = (_size - _offset) / PACKAGE_LENGTH;
 
 public:
 
@@ -227,10 +227,7 @@ public:
 private:
 
     // Pointer to the first package of the tensor
-    PACKAGE_TYPE* _begin = static_cast<PACKAGE_TYPE*>(_mm_malloc(_size * sizeof(float), PACKAGE_ALIGNEMENT));
-
-    // Pointer to the last package of the tensor
-    const PACKAGE_TYPE* _end = _begin + _numPackages;
+    PACKAGE_TYPE* _values = static_cast<PACKAGE_TYPE*>(_mm_malloc(_size * sizeof(float), PACKAGE_ALIGNEMENT));
 
     // To get access to private members of Tensor with different dimensions
     template <::std::size_t... otherDimensions>
