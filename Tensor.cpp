@@ -26,10 +26,9 @@ constexpr Tensor<Dimensions...>::Tensor(const Tensor<Dimensions...>& other)
 template <std::size_t... Dimensions>
 constexpr Tensor<Dimensions...>::Tensor(Tensor<Dimensions...>&& other) noexcept 
 {
-    this->_begin = other._begin;
-    this->_end = other._end;
+    this->_values = other._values;
 
-    other._begin = nullptr;
+    other._values = nullptr;
 }
 
 
@@ -39,10 +38,9 @@ template <std::size_t... OtherDimensions>
 constexpr Tensor<Dimensions...>::Tensor(Tensor<OtherDimensions...>&& other) noexcept 
 {
     static_assert((1 * ... * Dimensions) == (1 * ... * OtherDimensions), "Error in Tensor move constructor: incorrect dimensions");
-    this->_begin = other._begin;
-    this->_end = other._end;
+    this->_values = other._values;
 
-    other._begin = nullptr;
+    other._values = nullptr;
 }
 
 
@@ -51,17 +49,14 @@ template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...>::Tensor(float value)
 {
     const PACKAGE_TYPE packedValue = _SET1(value);
-    PACKAGE_TYPE* iter = _begin;
 
-    while (iter < _end)
+    for(size_t i = 0; i < _numPackages; ++i)
     {
-        *iter = packedValue;
-
-        ++iter;
+	_values[i] = packedValues;
     }
 
     if constexpr (_offset)
-        _MASKSTORE((float*)iter, remainderMask<_offset>(), packedValue);
+        _MASKSTORE(_values + _numPackages, remainderMask<_offset>(), packedValue);
 }
 
 
@@ -71,7 +66,7 @@ constexpr Tensor<Dimensions...>::Tensor(std::initializer_list<float> values)
 {
     debug_assert(values.size() == _size && "Error in Tensor constructor : the given initalizer list does not have a valid size.");
 
-    std::memcpy(_begin, values.begin(), _size * sizeof(float));
+    std::memcpy(_values, values.begin(), _size * sizeof(float));
 }
 
 
@@ -79,21 +74,17 @@ constexpr Tensor<Dimensions...>::Tensor(std::initializer_list<float> values)
 template <::std::size_t... Dimensions>
 Tensor<Dimensions...> zeros()
 {
-    Tensor<Dimensions...> output;;
+    Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE packedValue = _SETZERO();
+    const PACKAGE_TYPE packedValues = _SETZERO();
 
-    PACKAGE_TYPE* iter = output._begin;
-
-    while (iter < output._end)
+    for(size_t i = 0; i < output._numPackages; ++i)
     {
-        *iter = packedValue;
-
-        ++iter;
+	output._values[i] = packedValues;
     }
 
     if constexpr (output._offset)
-        _MASKSTORE((float*)iter, remainderMask<output._offset>(), packedValue);
+        _MASKSTORE(output._values + output._numPackages, remainderMask<output._offset>(), packedValues);
 
     return output;
 }
@@ -103,21 +94,17 @@ Tensor<Dimensions...> zeros()
 template <::std::size_t... Dimensions>
 Tensor<Dimensions...> ones()
 {
-    Tensor<Dimensions...> output;;
+    Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE packedValue = _CASTSI_PS(_SET1_EPI32(-1));;
+    const PACKAGE_TYPE packedValues = _CASTSI_PS(_SET1_EPI32(-1));;
 
-    PACKAGE_TYPE* iter = output._begin;
-
-    while (iter < output._end)
+    for(size_t i = 0; i < output._numPackages; ++i)
     {
-        *iter = packedValue;
-
-        ++iter;
+	output._values[i] = packedValues;
     }
 
     if constexpr (output._offset)
-        _MASKSTORE((float*)iter, remainderMask<output._offset>(), packedValue);
+        _MASKSTORE(output._values + output._numPackages, remainderMask<output._offset>(), packedValues);
 
     return output;
 }
@@ -134,20 +121,16 @@ Tensor<Dimensions...> rand(float mean, float sigma)
 
     std::normal_distribution<float> distribution(mean, sigma);
 
-    PACKAGE_TYPE* iter = output._begin;
-
-    while (iter < output._end)
+    for(size_t i = 0; i < output._numPackages; ++i)
     {
         PACKAGE_TYPE randomValues = _mm256_set_ps(distribution(generator), distribution(generator), distribution(generator), distribution(generator),
             distribution(generator), distribution(generator), distribution(generator), distribution(generator));
 
-        *iter = randomValues;
-
-        ++iter;
+        output._values[i] = randomValues;
     }
 
     if constexpr (output._offset)
-        _MASKSTORE((float*)iter, remainderMask<output._offset>(), _mm256_set_ps(distribution(generator), distribution(generator), distribution(generator), distribution(generator),
+        _MASKSTORE(output._values + output._numPackages, remainderMask<output._offset>(), _mm256_set_ps(distribution(generator), distribution(generator), distribution(generator), distribution(generator),
             distribution(generator), distribution(generator), distribution(generator), distribution(generator)));
 
     return output;
@@ -158,8 +141,8 @@ Tensor<Dimensions...> rand(float mean, float sigma)
 template<::std::size_t ...Dimensions>
 Tensor<Dimensions...>::~Tensor()
 {
-	if (_begin)
-		_mm_free(_begin);
+	if (_values)
+		_mm_free(_values);
 }
 
 
@@ -170,7 +153,7 @@ Tensor<Dimensions...>::~Tensor()
 template<::std::size_t ...Dimensions>
 constexpr void Tensor<Dimensions...>::operator=(const Tensor<Dimensions...>& other)
 {
-    std::memcpy(_begin, other._begin, _size * sizeof(float));
+    std::memcpy(_values, other._values, _size * sizeof(float));
 }
 
 
@@ -178,13 +161,12 @@ constexpr void Tensor<Dimensions...>::operator=(const Tensor<Dimensions...>& oth
 template<::std::size_t ...Dimensions>
 constexpr void Tensor<Dimensions...>::operator=(Tensor<Dimensions...>&& other) noexcept
 {
-    if (_begin)
-        _mm_free(_begin);
+    if (_values)
+        _mm_free(_values);
 
-    this->_begin = other._begin;
-    this->_end = other._end;
+    this->_values = other._values;
 
-    other._begin = nullptr;
+    other._values = nullptr;
 }
 
 
@@ -194,10 +176,10 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(const Tensor<Di
 {
     Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE* iterA = this->_begin;
-    const PACKAGE_TYPE* iterB = tensor._begin;
+    const PACKAGE_TYPE* iterA = this->_values;
+    const PACKAGE_TYPE* iterB = tensor._values;
 
-    PACKAGE_TYPE* iterO = output._begin;
+    PACKAGE_TYPE* iterO = output._values;
 
     while (iterO < output._end)
     {
@@ -221,10 +203,10 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(const Tensor<Di
 {
     Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE* iterA = this->_begin;
-    const PACKAGE_TYPE* iterB = tensor._begin;
+    const PACKAGE_TYPE* iterA = this->_values;
+    const PACKAGE_TYPE* iterB = tensor._values;
 
-    PACKAGE_TYPE* iterO = output._begin;
+    PACKAGE_TYPE* iterO = output._values;
 
     while (iterO < output._end)
     {
@@ -248,10 +230,10 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(const Tensor<Di
 {
     Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE* iterA = this->_begin;
-    const PACKAGE_TYPE* iterB = tensor._begin;
+    const PACKAGE_TYPE* iterA = this->_values;
+    const PACKAGE_TYPE* iterB = tensor._values;
 
-    PACKAGE_TYPE* iterO = output._begin;
+    PACKAGE_TYPE* iterO = output._values;
 
     while (iterO < output._end)
     {
@@ -275,10 +257,10 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(const Tensor<Di
 {
     Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE* iterA = this->_begin;
-    const PACKAGE_TYPE* iterB = tensor._begin;
+    const PACKAGE_TYPE* iterA = this->_values;
+    const PACKAGE_TYPE* iterB = tensor._values;
 
-    PACKAGE_TYPE* iterO = output._begin;
+    PACKAGE_TYPE* iterO = output._values;
 
     while (iterO < output._end)
     {
@@ -300,8 +282,8 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(const Tensor<Di
 template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(Tensor<Dimensions...>&& tensor)
 {
-    const PACKAGE_TYPE* iterA = this->_begin;
-    PACKAGE_TYPE* iterB = tensor._begin;
+    const PACKAGE_TYPE* iterA = this->_values;
+    PACKAGE_TYPE* iterB = tensor._values;
 
     while (iterB < tensor._end)
     {
@@ -322,8 +304,8 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(Tensor<Dimensio
 template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(Tensor<Dimensions...>&& tensor)
 {
-    const PACKAGE_TYPE* iterA = this->_begin;
-    PACKAGE_TYPE* iterB = tensor._begin;
+    const PACKAGE_TYPE* iterA = this->_values;
+    PACKAGE_TYPE* iterB = tensor._values;
 
     while (iterB < tensor._end)
     {
@@ -344,8 +326,8 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(Tensor<Dimensio
 template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(Tensor<Dimensions...>&& tensor)
 {
-	const PACKAGE_TYPE* iterA = this->_begin;
-	PACKAGE_TYPE* iterB = tensor._begin;
+	const PACKAGE_TYPE* iterA = this->_values;
+	PACKAGE_TYPE* iterB = tensor._values;
 
 	while (iterB < tensor._end)
 	{
@@ -366,8 +348,8 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(Tensor<Dimensio
 template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(Tensor<Dimensions...>&& tensor)
 {
-	const PACKAGE_TYPE* iterA = this->_begin;
-	PACKAGE_TYPE* iterB = tensor._begin;
+	const PACKAGE_TYPE* iterA = this->_values;
+	PACKAGE_TYPE* iterB = tensor._values;
 
 	while (iterB < tensor._end)
 	{
@@ -388,8 +370,8 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(Tensor<Dimensio
 template<::std::size_t ...Dimensions>
 constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions...>& tensor)
 {
-    PACKAGE_TYPE* iterA = this->_begin;
-    const PACKAGE_TYPE* iterB = tensor._begin;
+    PACKAGE_TYPE* iterA = this->_values;
+    const PACKAGE_TYPE* iterB = tensor._values;
 
     while (iterA < this->_end)
     {
@@ -408,8 +390,8 @@ constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions...>& te
 template<::std::size_t ...Dimensions>
 constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions...>& tensor)
 {
-	PACKAGE_TYPE* iterA = this->_begin;
-	const PACKAGE_TYPE* iterB = tensor._begin;
+	PACKAGE_TYPE* iterA = this->_values;
+	const PACKAGE_TYPE* iterB = tensor._values;
 
 	while (iterA < this->_end)
 	{
@@ -428,8 +410,8 @@ constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions...>& te
 template<::std::size_t ...Dimensions>
 constexpr void Tensor<Dimensions...>::operator*=(const Tensor<Dimensions...>& tensor)
 {
-	PACKAGE_TYPE* iterA = this->_begin;
-	const PACKAGE_TYPE* iterB = tensor._begin;
+	PACKAGE_TYPE* iterA = this->_values;
+	const PACKAGE_TYPE* iterB = tensor._values;
 
 	while (iterA < this->_end)
 	{
@@ -448,8 +430,8 @@ constexpr void Tensor<Dimensions...>::operator*=(const Tensor<Dimensions...>& te
 template<::std::size_t ...Dimensions>
 constexpr void Tensor<Dimensions...>::operator/=(const Tensor<Dimensions...>& tensor)
 {
-	PACKAGE_TYPE* iterA = this->_begin;
-	const PACKAGE_TYPE* iterB = tensor._begin;
+	PACKAGE_TYPE* iterA = this->_values;
+	const PACKAGE_TYPE* iterB = tensor._values;
 
 	while (iterA < this->_end)
 	{
@@ -471,7 +453,7 @@ constexpr void Tensor<Dimensions...>::operator/=(const Tensor<Dimensions...>& te
 template<::std::size_t ...Dimensions>
 void print(const Tensor<Dimensions...>& tensor)
 {
-    float* iter = (float*)tensor._begin;
+    float* iter = (float*)tensor._values;
     ::std::size_t dimensions[] = { Dimensions... };
 
     for (::std::size_t d = 0; d < tensor._size; ++d) {
@@ -512,7 +494,7 @@ constexpr float Tensor<Dimensions...>::sum()
 {
     PACKAGE_TYPE packedSum = _SETZERO();
 
-    PACKAGE_TYPE* iter = _begin;
+    PACKAGE_TYPE* iter = _values;
 
     while (iter < _end)
     {
@@ -535,7 +517,7 @@ constexpr float Tensor<Dimensions...>::sum()
 template<::std::size_t ...Dimensions>
 constexpr float Tensor<Dimensions...>::mean()
 {
-    PACKAGE_TYPE* iter = _begin;
+    PACKAGE_TYPE* iter = _values;
 
     PACKAGE_TYPE sum = _SETZERO();
 
@@ -562,7 +544,7 @@ constexpr float Tensor<Dimensions...>::variance(float mean)
 {
     PACKAGE_TYPE deviation = _SETZERO();
 
-    PACKAGE_TYPE* iter = _begin;
+    PACKAGE_TYPE* iter = _values;
 
     while (iter < _end)
     {
@@ -594,11 +576,11 @@ Tensor<Dimensions...> multiply_and_add(const Tensor<Dimensions...>& tensorA, con
 {
     Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE* iterA = tensorA._begin;
-    const PACKAGE_TYPE* iterB = tensorB._begin;
-    const PACKAGE_TYPE* iterC = tensorC._begin;
+    const PACKAGE_TYPE* iterA = tensorA._values;
+    const PACKAGE_TYPE* iterB = tensorB._values;
+    const PACKAGE_TYPE* iterC = tensorC._values;
 
-    PACKAGE_TYPE* iterO = output._begin;
+    PACKAGE_TYPE* iterO = output._values;
 
     while (iterO < output._end)
     {
@@ -624,11 +606,11 @@ Tensor<Dimensions...> multiply_and_sub(const Tensor<Dimensions...>& tensorA, con
 {
     Tensor<Dimensions...> output;
 
-    const PACKAGE_TYPE* iterA = tensorA._begin;
-    const PACKAGE_TYPE* iterB = tensorB._begin;
-    const PACKAGE_TYPE* iterC = tensorC._begin;
+    const PACKAGE_TYPE* iterA = tensorA._values;
+    const PACKAGE_TYPE* iterB = tensorB._values;
+    const PACKAGE_TYPE* iterC = tensorC._values;
 
-    PACKAGE_TYPE* iterO = output._begin;
+    PACKAGE_TYPE* iterO = output._values;
 
     while (iterO < output._end)
     {
@@ -653,8 +635,8 @@ Tensor<cols, rows, rest...> transpose(const Tensor<rows, cols, rest...>& tensor)
 {
     Tensor<cols, rows, rest...> output;
 
-    const float* iterA = (float*)tensor._begin;
-    float* iterB = (float*)output._begin;
+    const float* iterA = (float*)tensor._values;
+    float* iterB = (float*)output._values;
 
     for (::std::size_t r = 0; r < rows; ++r)
     {
@@ -667,8 +649,8 @@ Tensor<cols, rows, rest...> transpose(const Tensor<rows, cols, rest...>& tensor)
     /*const uint16_t& colsA = matrix.m_fullcols;
     const uint16_t& colsB = output.m_fullcols;
 
-    auto* iterA = tensor._begin;
-    auto* iterB = output._begin;
+    auto* iterA = tensor._values;
+    auto* iterB = output._values;
 
     #pragma omp parallel while schedule(dynamic)
     do
@@ -702,7 +684,7 @@ Tensor<cols, rows, rest...> transpose(const Tensor<rows, cols, rest...>& tensor)
             iterB += colsB;
         }
 
-        if ((iterB - output.m_begin + 1) % colsB == 0)
+        if ((iterB - output.m_values + 1) % colsB == 0)
         {
             iterB += 1 - colsB;
             iterA += (output.m_offcols - PACKAGE_LENGTH - matrix.m_rows) * colsA + 1;
@@ -732,10 +714,10 @@ Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, 
 
     Tensor<colsB, rowsA, rest...> output;
 
-    const float* iterA = (float*)tensorA._begin;
+    const float* iterA = (float*)tensorA._values;
     const float* iterB;
 
-    float* iterO = (float*)output._begin;
+    float* iterO = (float*)output._values;
 
     #pragma omp parallel do schedule(dynamic)
     do
@@ -745,7 +727,7 @@ Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, 
         for (; c < packagePerColumn; c += PACKAGE_LENGTH)
         {
             PACKAGE_TYPE sum = _SETZERO();
-            iterB = (float*)tensorB._begin + c;
+            iterB = (float*)tensorB._values + c;
 
             for (::std::size_t i = 0; i < colsA; ++i)
             {
@@ -763,7 +745,7 @@ Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, 
         if constexpr (offcols)
         {
             PACKAGE_TYPE sum = _SETZERO();
-            iterB = (float*)tensorB._begin + c;
+            iterB = (float*)tensorB._values + c;
 
             for (::std::size_t i = 0; i < colsA; ++i)
             {
@@ -801,7 +783,7 @@ Tensor<colsB, rowsA, rest...> mul_transposed(const Tensor<colsA, rowsA, rest...>
     float* iterA;
     float* iterB;
 
-    float* iterO = (float*)output._begin;
+    float* iterO = (float*)output._values;
 
     #pragma omp parallel for schedule(dynamic)
     for (::std::size_t r = 0; r < rowsA; ++r)
@@ -810,8 +792,8 @@ Tensor<colsB, rowsA, rest...> mul_transposed(const Tensor<colsA, rowsA, rest...>
         {
             PACKAGE_TYPE sum = _SETZERO();
 
-            iterA = (float*)tensorA._begin + colsA * r;
-            iterB = (float*)tensorB._begin + colsA * c;
+            iterA = (float*)tensorA._values + colsA * r;
+            iterB = (float*)tensorB._values + colsA * c;
 
             ::std::size_t i = 0;
 
@@ -855,15 +837,15 @@ Tensor<rowsA> mul_transposed_scalar(const Tensor<colsA, rowsA>& tensorA, const T
     float* iterA;
     float* iterB;
 
-    float* iterO = (float*)output._begin;
+    float* iterO = (float*)output._values;
 
     #pragma omp parallel for schedule(dynamic)
     for (::std::size_t r = 0; r < rowsA; ++r)
     {
         PACKAGE_TYPE sum = _SETZERO();
 
-        iterA = (float*)tensorA._begin + colsA * r;
-        iterB = (float*)tensorB._begin;
+        iterA = (float*)tensorA._values + colsA * r;
+        iterB = (float*)tensorB._values;
 
         ::std::size_t i = 0;
 
@@ -908,15 +890,15 @@ Tensor<colsB, colsA> mul_transposed_scalar(const Tensor<colsA>& tensorA, const T
     #pragma omp parallel for schedule(dynamic)
     for (::std::size_t c = 0; c < colsA; ++c)
     {
-        iterO = (float*)output._begin + c * colsB;
+        iterO = (float*)output._values + c * colsB;
 
-        PACKAGE_TYPE valueA = _LOAD1((float*)tensorA._begin + c);
+        PACKAGE_TYPE valueA = _LOAD1((float*)tensorA._values + c);
 
         ::std::size_t i = 0;
 
         for (; i < packagePerColumn; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE valueB = _LOAD((float*)tensorB._begin + i);
+            const PACKAGE_TYPE valueB = _LOAD((float*)tensorB._values + i);
 
             const PACKAGE_TYPE result = _MUL(valueA, valueB);
 
@@ -925,7 +907,7 @@ Tensor<colsB, colsA> mul_transposed_scalar(const Tensor<colsA>& tensorA, const T
 
         if constexpr (offcols)
         {
-            const PACKAGE_TYPE valueB = _LOAD((float*)tensorB._begin + i);
+            const PACKAGE_TYPE valueB = _LOAD((float*)tensorB._values + i);
 
             const PACKAGE_TYPE result = _MUL(valueA, valueB);
 
