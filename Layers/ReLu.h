@@ -11,21 +11,21 @@ public:
 
     constexpr ReLu() {}
 
-    outputType Forward(inputType& input) override
+    inline outputType Forward(inputType& input) override
     {
         input.apply_ReLu();
 
-        return std::move(input);
+        return input;
     }
 
-    inputType Backward(outputType& input) override
+    inline inputType Backward(outputType& input) override
     {
         input.apply_ReLu_derivative();
 
         return std::move(input);
     }
 
-    void Update() override
+    inline void Update() override
     {
 	}
 

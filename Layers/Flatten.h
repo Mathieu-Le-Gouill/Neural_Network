@@ -13,17 +13,17 @@ public:
 
     constexpr Flatten() {}
 
-    outputType Forward(inputType& input) override
+    inline outputType Forward(inputType& input) override
     {
         return input.flatten();
     }
 
-    inputType Backward(outputType& input) override
+    inline inputType Backward(outputType& input) override
     {
         return input.reshape<inputDims...>();
     }
 
-    void Update() override
+    inline void Update() override
     {
     }
 };

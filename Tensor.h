@@ -3,10 +3,16 @@
 #include "simd_utils.h"
 #include "debug.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
+
+// TODO : remove the useless constexpr ...
+
 
 template <::std::size_t... Dimensions>
-class Tensor {
-
+class Tensor 
+{
     // Total size of the tensor
     static constexpr ::std::size_t _size = (1 * ... * Dimensions);
 
@@ -16,7 +22,7 @@ class Tensor {
     // The number of elements which cannot fit in a package
     static constexpr uint16_t _offset = _size % PACKAGE_LENGTH;
 
-    // The number of packages needed to store the tensor the offset elements excluded
+    // The number of packages needed to store the tensor including the offset elements
     static constexpr ::std::size_t _numPackages = (_size - _offset) / PACKAGE_LENGTH;
 
 public:
@@ -62,9 +68,9 @@ public:
     friend Tensor<Dimensions...> ones();
 
 
-    // Fill Tensors with random values with a distribution based on the given mean and sigma
+    // Fill Tensors with random values with a distribution based on the given mean and the standard deviation
     template <::std::size_t... Dimensions>
-    friend Tensor<Dimensions...> rand(float mean, float sigma);
+    friend Tensor<Dimensions...> normal(float mean, float std);
 
 
     // Destructor
@@ -77,7 +83,6 @@ public:
     // Copy operator with a Tensor of the same dimensions
     constexpr void operator= (const Tensor<Dimensions...>& other);
 
-
     // Copy operator with a rvalue Tensor of the same dimensions
     constexpr void operator= (Tensor<Dimensions...>&& other) noexcept;
 
@@ -86,14 +91,11 @@ public:
     // Element-wise addition with a Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator+(const Tensor<Dimensions...>& tensor);
 
-
     // Element-wise substraction with a Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator-(const Tensor<Dimensions...>& tensor);
 
-
     // Element-wise multiplication with a Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator*(const Tensor<Dimensions...>& tensor);
-
 
     // Element-wise division with a Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator/(const Tensor<Dimensions...>& tensor);
@@ -103,14 +105,11 @@ public:
     // Element-wise addition with a rvalue Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator+(Tensor<Dimensions...>&& tensor);
 
-
     // Element-wise substraction with a rvalue Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator-(Tensor<Dimensions...>&& tensor);
 
-
     // Element-wise multiplication with a rvalue Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator*(Tensor<Dimensions...>&& tensor);
-
 
     // Element-wise division with a rvalue Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator/(Tensor<Dimensions...>&& tensor);
@@ -120,14 +119,11 @@ public:
     // Element-wise addition of the tensor with another tensor of the same dimensions
     constexpr void operator+=(const Tensor<Dimensions...>& tensor);
 
-
     // Element-wise substraction of the tensor with another tensor of the same dimensions
     constexpr void operator-=(const Tensor<Dimensions...>& tensor);
 
-
     // Element-wise multiplication of the tensor with another tensor of the same dimensions
     constexpr void operator*=(const Tensor<Dimensions...>& tensor);
-
 
     // Element-wise division of the tensor with another tensor of the same dimensions
     constexpr void operator/=(const Tensor<Dimensions...>& tensor);
@@ -150,8 +146,22 @@ public:
     constexpr Tensor<(1 * ... * Dimensions)> flatten();
 
 
+    // Compute the absolute value of each element in the tensor
+    template<::std::size_t ...Dimensions>
+    friend Tensor<Dimensions...> abs(const Tensor<Dimensions...>& tensor);
+
+
     // Compute the sum of each values in the tensor
     constexpr float sum();
+
+
+    // Find the index of the maximum value in the tensor
+    constexpr size_t argmax();
+
+
+    // <!> WARNING : The offset values are compared to zero in the mask | The function horizontal_max8 may not be optimized <!>
+    // Find the maximum value in the tensor
+    constexpr float max();
 
 
     // Compute the mean of the values the tensor
@@ -185,19 +195,19 @@ public:
     friend Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, const Tensor<colsB, colsA, rest...>& tensorB);
 
 
-    // <!> A REFAIRE <!>  -> Pour que toutes les dimensions soient prises en compte
+    // <!> WARNING : All the tensors dimensions are not taken into account <!> 
     // Matrix multiplication between tensorA and the transpose of tensorB
     template<::std::size_t colsA, ::std::size_t rowsA, ::std::size_t colsB, ::std::size_t... rest>
     friend Tensor<colsB, rowsA, rest...> mul_transposed(const Tensor<colsA, rowsA, rest...>& tensorA, const Tensor<colsA, colsB, rest...>& tensorB);
 
 
     // Matrix multiplication between tensorA and the transpose of tensorB as a scalar
-    template<::std::size_t colsA, ::std::size_t rowsA, ::std::size_t... rest>
+    template<::std::size_t colsA, ::std::size_t rowsA>
     friend Tensor<rowsA> mul_transposed_scalar(const Tensor<colsA, rowsA>& tensorA, const Tensor<colsA>& tensorB);
 
 
     // Matrix multiplication between the transpose of tensorA and tensorB both as a scalar
-    template<::std::size_t colsA, ::std::size_t colsB, ::std::size_t... rest>
+    template<::std::size_t colsA, ::std::size_t colsB>
     friend Tensor<colsB, colsA> mul_transposed_scalar(const Tensor<colsA>& tensorA, const Tensor<colsB>& tensorB);
 
 
@@ -211,7 +221,6 @@ public:
     // Apply the ReLu function on the tensor values
     void apply_ReLu();
 
-
     // Apply the derivative of the sigmoid function on the tensor values
     void apply_ReLu_derivative();
 
@@ -219,15 +228,14 @@ public:
     // Apply a normal distribution on the tensor values
     void apply_normalization();
 
-
     // Normalize the tensor based on a given mean and variance then shift and scale the values
     void norm_shift_and_scale(float mean, float variance, float shift, float scale);
 
 
 private:
-
-    // Pointer to the first package of the tensor
-    PACKAGE_TYPE* _values = static_cast<PACKAGE_TYPE*>(_mm_malloc(_size * sizeof(float), PACKAGE_ALIGNEMENT));
+    
+    // Pointer to the tensor values
+    PACKAGE_TYPE* _values;
 
     // To get access to private members of Tensor with different dimensions
     template <::std::size_t... otherDimensions>

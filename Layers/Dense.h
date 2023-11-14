@@ -13,9 +13,10 @@ public:
     constexpr Dense() {}
 
     outputType Forward(inputType& input) override
-    {
-        _previousInput = std::move(input);
-        outputType output = mul_transposed_scalar(_weights, _previousInput) + _biases;
+    {      
+        _previousInput = input;
+
+        outputType output = mul_transposed_scalar(_weights, input) + _biases;
 
         return output;
     }
@@ -32,8 +33,8 @@ public:
 
     void Update() override
     {
-		_weights -= (_weightsGradient * learningRate + std::move(_previousWeightsGradient) * momentum) / (float) batchSize;
-        _biases -= (_biasesGradient * learningRate + std::move(_previousBiasesGradient) * momentum) / (float) batchSize;
+		_weights -= (_weightsGradient * learningRate + _previousWeightsGradient * momentum) / (float) batchSize;
+        _biases -= (_biasesGradient * learningRate + _previousBiasesGradient * momentum) / (float) batchSize;
 
         _previousWeightsGradient = std::move(_weightsGradient);
         _previousBiasesGradient = std::move(_biasesGradient);
@@ -44,7 +45,7 @@ public:
 
 private:
 
-    Tensor<numInputNeurons, numOutputNeurons> _weights = rand<numInputNeurons, numOutputNeurons>(0.f, 1.f);
+    Tensor<numInputNeurons, numOutputNeurons> _weights = normal<numInputNeurons, numOutputNeurons>(0.f, sqrt(1.f / numInputNeurons));
     Tensor<numOutputNeurons> _biases = zeros<numOutputNeurons>();
 
     inputType _previousInput;

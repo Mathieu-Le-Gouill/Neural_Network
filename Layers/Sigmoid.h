@@ -11,15 +11,16 @@ public:
 
     constexpr Sigmoid() {}
 
-    outputType Forward(inputType& input) override
+    inline outputType Forward(inputType& input) override
     {
         input.apply_sigmoid();
+
         _output = input;
 
-        return std::move(input);
+        return input;
     }
 
-    inputType Backward(outputType& input) override
+    inline inputType Backward(outputType& input) override
     {
         input *= _output * (ones<inputDims...>() - _output);
 
@@ -31,6 +32,6 @@ public:
     }
 
 private :
-	outputType _output;
+    outputType _output;
 
 };

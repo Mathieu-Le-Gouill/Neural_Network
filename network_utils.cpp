@@ -9,30 +9,24 @@
 template<::std::size_t ...Dimensions>
 void Tensor<Dimensions...>::apply_sigmoid()
 {
-    PACKAGE_TYPE* iter = this->_begin;
-
     const PACKAGE_TYPE set0 = _SETZERO();
     const PACKAGE_TYPE set1 = _SET1(1.f);
 
-    const PACKAGE_TYPE value = _SETZERO();
-
-    while (iter < this->_end)
+    for (size_t i = 0; i < _numPackages; ++i)
     {
-        const PACKAGE_TYPE expValues = _EXP(_SUB(set0, *iter));  // Compute exponent
-        const PACKAGE_TYPE sigmoid = _RCP(_ADD(set1, expValues)); // Compute sigmoid
+        const PACKAGE_TYPE expValues = _EXP( _SUB(set0, _values[i]));  // Compute exponent
+		const PACKAGE_TYPE sigmoid = _RCP( _ADD(set1, expValues)); // Compute sigmoid
 
-        *iter = sigmoid;
-
-        ++iter;
+        _values[i] = sigmoid;
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE expValues = _EXP(_SUB(set0, *iter));  // Compute exponent
-        const PACKAGE_TYPE sigmoid = _RCP(_ADD(set1, expValues)); // Compute sigmoid
+		const PACKAGE_TYPE expValues = _EXP(_SUB(set0, _values[_numPackages]));  // Compute exponent
+		const PACKAGE_TYPE sigmoid = _RCP(_ADD(set1, expValues)); // Compute sigmoid
 
-        *iter = applyMask<_offset>(sigmoid); // Apply mask
-    }
+        _values[_numPackages] = _AND(sigmoid, remainderMask<_offset>()); // Apply mask  
+	}
 }
 
 
@@ -40,19 +34,15 @@ void Tensor<Dimensions...>::apply_sigmoid()
 template<::std::size_t ...Dimensions>
 void Tensor<Dimensions...>::apply_ReLu()
 {
-    PACKAGE_TYPE* iter = this->_begin;
-
     const PACKAGE_TYPE zeros = _SETZERO();
 
-    while (iter < this->_end)
+    for (size_t i = 0; i < _numPackages; ++i)
     {
-        *iter = _MAX(*iter, zeros);
-
-        ++iter;
-    }
+		_values[i] = _MAX(_values[i], zeros);
+	}
 
     if constexpr (_offset)
-        _MASKSTORE((float*)iter, remainderMask<_offset>(), _MAX(*iter, zeros));
+        _values[_numPackages] = _AND( _MAX(_values[_numPackages], zeros), remainderMask<_offset>());
 }
 
 
@@ -60,19 +50,15 @@ void Tensor<Dimensions...>::apply_ReLu()
 template<::std::size_t ...Dimensions>
 void Tensor<Dimensions...>::apply_ReLu_derivative()
 {
-    PACKAGE_TYPE* iter = this->_begin;
-
     const PACKAGE_TYPE zeros = _SETZERO();
 
-    while (iter < this->_end)
+    for (size_t i = 0; i < _numPackages; ++i)
     {
-        *iter = _AND(_CMP(*iter, zeros, _CMP_GT_OQ), *iter);
-
-        ++iter;
-    }
+		_values[i] = _AND( _CMP(_values[i], zeros, _CMP_GT_OQ), _values[i]);
+	}
 
     if constexpr (_offset)
-        _MASKSTORE((float*)iter, remainderMask<_offset>(), _AND(_CMP(*iter, zeros, _CMP_GT_OQ), *iter));
+		_values[_numPackages] = _AND( _AND( _CMP(_values[_numPackages], zeros, _CMP_GT_OQ), _values[_numPackages]), remainderMask<_offset>());
 }
 
 
@@ -82,28 +68,23 @@ void Tensor<Dimensions...>::apply_normalization()
 {
     const float mean = this->mean();
 
-    // Maybe there is a better way to compute sigma reciprocal
-    const float sigma = std::sqrt(this->variance(mean));
-    const float sigmaReciprocal = 1.f / sigma;
+    // Maybe there is a better way to compute standard deviation reciprocal
+    const float std = std::sqrt(this->variance(mean));
+    const float sigmaReciprocal = 1.f / std;
 
     PACKAGE_TYPE packedMean = _SET1(mean);
     PACKAGE_TYPE packedSigmaReciprocal = _SET1(sigmaReciprocal);
 
-    PACKAGE_TYPE* iter = _begin;
-
-    while (iter < _end)
+    for (size_t i = 0; i < _numPackages; ++i)
     {
-
-        *iter = _FMSUB(*iter, packedSigmaReciprocal, packedMean); // Normalize
-
-        ++iter;
-    }
+		_values[i] = _FMSUB(_values[i], packedSigmaReciprocal, packedMean); // Normalize
+	}
 
     if constexpr (_offset)
     {
-        *iter = _FMSUB(*iter, packedSigmaReciprocal, packedMean); // Normalize
+        const PACKAGE_TYPE value = _FMSUB(_values[_numPackages], packedSigmaReciprocal, packedMean);
 
-        *iter = applyMask<_offset>(*iter); // Apply mask
+        _values[_numPackages] = _AND(value, remainderMask<_offset>());
     }
 }
 
@@ -123,22 +104,17 @@ void Tensor<Dimensions...>::norm_shift_and_scale(float mean, float variance, flo
     PACKAGE_TYPE packedMean = _SET1(mean);
     PACKAGE_TYPE packedSigmaReciprocal = _SET1(sigmaReciprocal);
 
-    PACKAGE_TYPE* iter = _begin;
-
-    while (iter < _end)
+    for (size_t i = 0; i < _numPackages; ++i)
     {
-
-        *iter = _FMSUB(*iter, packedSigmaReciprocal, packedMean); // Normalize
-        *iter = _FMADD(*iter, packedScale, packedShift); // Scale and shift
-
-        ++iter;
+        _values[i] = _FMSUB(_values[i], packedSigmaReciprocal, packedMean); // Normalize
+        _values[i] = _FMADD(_values[i], packedScale, packedShift); // Scale and shift
     }
 
     if constexpr (_offset)
     {
-        *iter = _FMSUB(*iter, packedSigmaReciprocal, packedMean); // Normalize
-        *iter = _FMADD(*iter, packedScale, packedShift); // Scale and shift
+        _values[_numPackages] = _FMSUB(_values[_numPackages], packedSigmaReciprocal, packedMean); // Normalize
+        _values[_numPackages] = _FMADD(_values[_numPackages], packedScale, packedShift); // Scale and shift
 
-        *iter = applyMask<_offset>(*iter); // Apply mask
+        _values[_numPackages] = _AND(_values[_numPackages], remainderMask<_offset>()); // Apply mask
     }
 }

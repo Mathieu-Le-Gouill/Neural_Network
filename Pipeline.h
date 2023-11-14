@@ -27,7 +27,7 @@ class Pipeline {
 public:
 
 	template <::std::size_t... Dims>
-	auto forward(Tensor<Dims...>& input) {
+	auto forward(Tensor<Dims...> input) {
 		return proccessLayers(input, std::index_sequence_for<Layers...>(), [](auto&& layer, auto&& data) {
 			return layer.Forward(std::forward<decltype(data)>(data));
 		});
@@ -42,7 +42,7 @@ public:
 
 
 	template <::std::size_t... Dims>
-	auto backward(Tensor<Dims...>& input) {
+	auto backward(Tensor<Dims...> input) {
 		return proccessLayers(input, makeIndexSequenceReverse<sizeof...(Layers)>(), [](auto&& layer, auto&& data) {
 			return layer.Backward(std::forward<decltype(data)>(data));
 		});
@@ -53,6 +53,12 @@ public:
 		return proccessLayers(input, makeIndexSequenceReverse<sizeof...(Layers)>(), [](auto&& layer, auto&& data) {
 			return layer.Backward(std::forward<decltype(data)>(data));
 		});
+	}
+
+	void update()
+	{
+		// Update all layers
+		std::apply([](auto&&... layer) {((layer.Update()), ...); }, layers);
 	}
 
 private:

@@ -8,19 +8,54 @@ using namespace ::std::chrono;
 
 int main() 
 {
+    /*auto a = rand<3, 5>(0.f, 1.f);
+    std::cout<< "a: \n";
+    print(a);
+
+    std::cout << "argmax: \n";
+    cout << a.argmax();*/
+
+
     Pipeline< Flatten<inputWidth, inputHeight, inputChannels>,
               Dense<inputSize, 20>,
-              ReLu<20>,
+              Sigmoid<20>,
               Dense<20, 10>,
-              ReLu<10> > network;
+              Sigmoid<10> > network;
 
-    std::cout<<"Forward pass: \n";
-    auto output = network.forward(rand<inputWidth, inputHeight, inputChannels>(0.f, 1.f));
-    print(output);
+    float cumulativeAccuracy = 0.f;
+    float cumulativeLoss = 0.f;
 
-    std::cout << "Backward pass: \n";
-    auto output2 = network.backward(rand<outputSize>(0.f, 1.f));
-    print(output2);
+    cout << "TRAINING...\n";
+
+    for (size_t e = 0; e < epochs; ++e)
+    {
+        std::cout << "Epoch: " << e << "\n";
+
+        Tensor<inputWidth, inputHeight, inputChannels> input = normal<inputWidth, inputHeight, inputChannels>(0.f, 1.f);
+
+        //std::cout << "Forward pass: \n";
+        Tensor<outputSize> result = network.forward(input);
+
+        std::cout << "Result: \n";
+        print(result);
+
+        Tensor<outputSize> target = normal<outputSize>(0.f, 1.f);
+        Tensor<outputSize> loss = result - target;
+
+        std::cout << "Loss: \n";
+        print(loss);
+
+        //std::cout << "Backward pass: \n";
+        auto upstreamLoss = network.backward(loss);
+
+        network.update();
+
+        cumulativeAccuracy += result.argmax() == target.argmax();
+
+        cumulativeLoss += abs(loss).sum() / outputSize;
+    }
+
+    cout << "TESTING...\n";
 
 
     /*Tensor<9, 9> a = rand<9, 9>();
