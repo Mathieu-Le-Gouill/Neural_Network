@@ -123,22 +123,9 @@ Tensor<Dimensions...> zeros()
 
 // Fill Tensors with ones
 template <::std::size_t... Dimensions>
-Tensor<Dimensions...> ones()
+inline Tensor<Dimensions...> ones()
 {
-    Tensor<Dimensions...> output;
-
-    constexpr size_t numPackages = output._numPackages;
-    constexpr uint16_t offset = output._offset;
-
-    const PACKAGE_TYPE packedValues = _SET1(1.f);
-
-    for (size_t i = 0; i < numPackages; ++i)
-    {
-        output._values[i] = packedValues;
-    }
-
-    if constexpr (offset)
-        output._values[numPackages] = _AND(packedValues, remainderMask<offset>());
+    Tensor<Dimensions...> output(1.0f);
 
     return output;
 }
@@ -539,11 +526,7 @@ constexpr size_t Tensor<Dimensions...>::argmax()
 
                     for (size_t r = i+1; r < _size; ++r)
                     {
-                        if (values[r] > max)
-                        {
-                            max = values[r];
-                            argmax = r;
-                        }
+                        argmax = (values[r] > values[argmax]) ? r : argmax;
                     }
 
                     return argmax;

@@ -73,6 +73,40 @@ public:
     friend Tensor<Dimensions...> normal(float mean, float std);
 
 
+    // Fill Tensors with random values with the Glorot also named Xavier normal distribution
+    // Often used with activation functions like tanh or sigmoid
+    template <::std::size_t numInput, ::std::size_t numOutput>
+    friend  Tensor<numInput, numOutput> glorot_normal();
+
+    // Fill Tensors with random values with the Glorot also named Xavier uniform distribution
+    // Often used with activation functions like tanh or sigmoid
+    template <::std::size_t numInput, ::std::size_t numOutput>
+    friend  Tensor<numInput, numOutput> glorot_uniform();
+
+
+    // Fill Tensors with random values with He normal distribution
+    // Often used with RELU activation function
+    template <::std::size_t numInput, ::std::size_t numOutput>
+    friend  Tensor<numInput, numOutput> he_normal();
+
+    // Fill Tensors with random values with He uniform distribution
+        // Often used with ReLu activation function
+    template <::std::size_t numInput, ::std::size_t numOutput>
+    friend  Tensor<numInput, numOutput> he_uniform();
+
+
+
+    // Fill Tensors with random values with Lecun normal distribution
+    // Often used with SELU or sigmoid activation function
+    template <::std::size_t numInput, ::std::size_t numOutput>
+    friend  Tensor<numInput, numOutput> lecun_normal();
+
+    // Fill Tensors with random values with Lecun uniform distribution
+    // Often used with SELU or sigmoid activation function
+    template <::std::size_t numInput, ::std::size_t numOutput>
+    friend  Tensor<numInput, numOutput> lecun_uniform();
+
+
     // Destructor
     ~Tensor();
 
@@ -244,3 +278,4 @@ private:
 
 #include "Tensor.cpp"
 #include "network_utils.cpp"
+#include "kernel_utils.cpp"

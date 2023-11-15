@@ -2,7 +2,8 @@
 #include "Layer.h"
 #include "../network_parameters.h"
 
-template <::std::size_t numInputNeurons, ::std::size_t numOutputNeurons>
+
+template <::std::size_t numInputNeurons, ::std::size_t numOutputNeurons, Kernel_Initializer kernel_initializer = Kernel_Initializer::Glorot_Normal>
 class Dense : public Layer< Tensor<numInputNeurons>, Tensor<numOutputNeurons>>
 {
     using inputType = Tensor<numInputNeurons>;
@@ -45,7 +46,7 @@ public:
 
 private:
 
-    Tensor<numInputNeurons, numOutputNeurons> _weights = normal<numInputNeurons, numOutputNeurons>(0.f, sqrt(1.f / numInputNeurons));
+    Tensor<numInputNeurons, numOutputNeurons> _weights = Kernel_init<numInputNeurons, numOutputNeurons, kernel_initializer>();
     Tensor<numOutputNeurons> _biases = zeros<numOutputNeurons>();
 
     inputType _previousInput;

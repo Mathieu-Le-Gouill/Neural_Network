@@ -6,6 +6,7 @@ struct Kernel
 {
     uint16_t width;
     uint16_t height;
+    Kernel_Initializer initializer = Kernel_Initializer::Glorot_Normal;
 };
 
 struct Stride
@@ -44,5 +45,5 @@ public:
 
 private:
 
-    Tensor<k.width, k.height> _kernel = rand<k.width, k.height>(0.f, 1.f);   
+    Tensor<k.width, k.height> _kernel = Kernel_init<k.width, k.height, k.initializer>();
 };
