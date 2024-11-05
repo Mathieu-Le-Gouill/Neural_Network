@@ -16,30 +16,30 @@ struct Stride
 };
 
 template <Kernel k, Stride s, size_t first, size_t second, size_t... inputDims>
-class Conv : public Layer< Tensor<first, second, inputDims...>, Tensor<(first - k.width) / s.horizontal + 1, (second - k.height) / s.vertical + 1, inputDims...>>
+class Conv : public Layer< Conv< k, s, first, second, inputDims...>, Tensor<first, second, inputDims..., minibatchSize>, Tensor<(first - k.width) / s.horizontal + 1, (second - k.height) / s.vertical + 1, inputDims..., minibatchSize>>
 {
-    using inputType = Tensor<first, second, inputDims...>;
-    using outputType = Tensor<(first - k.width) / s.horizontal + 1, (second - k.height) / s.vertical + 1, inputDims...>;
+    using inputType = Tensor<first, second, inputDims..., minibatchSize>;
+    using outputType = Tensor<(first - k.width) / s.horizontal + 1, (second - k.height) / s.vertical + 1, inputDims..., minibatchSize>;
 
 public:
     
     constexpr Conv() {}
 
-    outputType Forward(inputType& tensor) override
+    inline outputType Forward(inputType& tensor) override
     {
         outputType output(3.f);
 
         return output;
     }
 
-    inputType Backward(outputType& tensor) override
+    inline inputType Backward(outputType& tensor) override
     {
         inputType output(3.f);
 
         return output;
     }
 
-    void Update() override
+    inline void Update() override
     {
 	}
 

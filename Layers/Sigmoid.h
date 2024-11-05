@@ -2,36 +2,37 @@
 #include "Layer.h"
 
 template <::std::size_t... inputDims>
-class Sigmoid : public Layer< Tensor<inputDims...>, Tensor<inputDims...>>
+class Sigmoid : public Layer< Sigmoid<inputDims...>, Tensor<inputDims...>, Tensor<inputDims...>>
 {
-    using inputType = Tensor<inputDims...>;
-    using outputType = Tensor<inputDims...>;
+    using InputType  = Tensor<inputDims...>;
+    using OutputType = Tensor<inputDims...>;
 
 public:
 
-    constexpr Sigmoid() {}
+    constexpr Sigmoid() = default;
 
-    inline outputType Forward(inputType& input) override
+    inline OutputType Forward(InputType& input) noexcept
     {
         input.apply_sigmoid();
 
-        _output = input;
+        _output = input;// Cache the output for backpropagation
 
-        return input;
+        return _output;
     }
 
-    inline inputType Backward(outputType& input) override
+    inline InputType Backward(OutputType& upstream_loss_gradient) noexcept
     {
-        input *= _output * (ones<inputDims...>() - _output);
+        // Compute the derivative of the sigmoid function with respect to the input
+        OutputType loss_gradient = std::move(upstream_loss_gradient) * _output * (ones<inputDims...>() - _output);
 
-        return std::move(input);
+        return loss_gradient;
     }
 
-    void Update() override
+    inline void Update() noexcept
     {
     }
 
 private :
-    outputType _output;
 
+    OutputType _output;
 };

@@ -3,10 +3,10 @@
 #include "../network_parameters.h"
 
 template <::std::size_t... inputDims>
-class Norm : public Layer< Tensor<inputDims...>, Tensor<inputDims...>>
+class Norm : public Layer< Norm<inputDims...>, Tensor<inputDims..., minibatchSize>, Tensor<inputDims..., minibatchSize>>
 {
-	using inputType = Tensor<inputDims...>;
-	using outputType = Tensor<inputDims...>;
+	using inputType = Tensor<inputDims..., minibatchSize>;
+	using outputType = Tensor<inputDims..., minibatchSize>;
 
 	public:
 		constexpr Norm() {}
@@ -33,8 +33,8 @@ class Norm : public Layer< Tensor<inputDims...>, Tensor<inputDims...>>
 
 		void Update() override
 		{
-			_shift -= (_shiftGradient * learningRate + _previousShiftGradient * momentum) / batchSize;
-			_scale -= (_scaleGradient * learningRate + _previousScaleGradient * momentum) / batchSize;
+			_shift -= (_shiftGradient * learningRate + _previousShiftGradient * momentum) / minibatchSize;
+			_scale -= (_scaleGradient * learningRate + _previousScaleGradient * momentum) / minibatchSize;
 
 			_previousShiftGradient = _shiftGradient;
 			_previousScaleGradient = _scaleGradient;

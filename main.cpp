@@ -1,83 +1,106 @@
 #include <iostream>
 #include <chrono>
 #include "Pipeline.h"
+#include "MNIST_Loader.h"
+
+#define PERF_NET 0
+#define TEST_NET 1
+#define TIME_NET 1
 
 using namespace ::std;
 using namespace ::std::chrono;
-#include <immintrin.h>
 
-int main() 
-{
-    /*auto a = rand<3, 5>(0.f, 1.f);
-    std::cout<< "a: \n";
-    print(a);
+int main()
+{  
+    auto inputs = Load_MNIST_File("train-images.idx3-ubyte", nbTrainImages);
+    auto targets = GetTargetValues("train-labels.idx1-ubyte", nbTrainImages);
 
-    std::cout << "argmax: \n";
-    cout << a.argmax();*/
+    Pipeline< Flatten<inputWidth, inputHeight>,
+        Dense<inputSize, 32, LeCun_Normal>,
+        Sigmoid<32>,
+        Dense<32, 10, LeCun_Normal>,
+        Sigmoid<10> > network;
 
+    float cumulativeAccuracy;
+    float cumulativeLoss;
 
-    Pipeline< Flatten<inputWidth, inputHeight, inputChannels>,
-              Dense<inputSize, 20>,
-              Sigmoid<20>,
-              Dense<20, 10>,
-              Sigmoid<10> > network;
+    std::cout << "TRAINING...\n";
 
-    float cumulativeAccuracy = 0.f;
-    float cumulativeLoss = 0.f;
+    #if TIME_NET
+        auto t_start = std::chrono::steady_clock::now();
+    #endif
 
-    cout << "TRAINING...\n";
-
-    for (size_t e = 0; e < epochs; ++e)
+    for (size_t e = 0; e < epochs; ++e) 
     {
-        std::cout << "Epoch: " << e << "\n";
+        #if PERF_NET
+            std::cout << "\nEpoch " << e << " :" << endl;
+            cumulativeAccuracy = 0.f;
+            cumulativeLoss = 0.f;
+        #endif
 
-        Tensor<inputWidth, inputHeight, inputChannels> input = normal<inputWidth, inputHeight, inputChannels>(0.f, 1.f);
+        for (size_t b = 0; b < minibatchSize; ++b) 
+        {
+            const auto& input = inputs[e * minibatchSize + b];
+            const auto& target = targets[e * minibatchSize + b];
+            
+            Tensor<outputSize> prediction = network.forward(input);
 
-        //std::cout << "Forward pass: \n";
-        Tensor<outputSize> result = network.forward(input);
+            Tensor<outputSize> error = prediction - target;
 
-        std::cout << "Result: \n";
-        print(result);
+            network.backward(error);
 
-        Tensor<outputSize> target = normal<outputSize>(0.f, 1.f);
-        Tensor<outputSize> loss = result - target;
+            #if PERF_NET
+                cumulativeAccuracy += prediction.argmax() == target.argmax();
+                cumulativeLoss += (abs(error)).sum() / static_cast<float>(outputSize);
+            #endif
+        }
 
-        std::cout << "Loss: \n";
-        print(loss);
-
-        //std::cout << "Backward pass: \n";
-        auto upstreamLoss = network.backward(loss);
+        #if PERF_NET
+            std::cout << "Loss : " << cumulativeLoss / static_cast<float>(minibatchSize) << endl;
+            std::cout << "Accuracy : " << cumulativeAccuracy / static_cast<float>(minibatchSize) << "\n" << endl;
+        #endif
 
         network.update();
-
-        cumulativeAccuracy += result.argmax() == target.argmax();
-
-        cumulativeLoss += abs(loss).sum() / outputSize;
     }
 
-    cout << "TESTING...\n";
+    #if TIME_NET
+        auto t_end = std::chrono::steady_clock::now();
+        cout << "\nTraining Time : " << std::chrono::duration<double, std::milli>(t_end - t_start).count() << "ms" << endl;
+    #endif
 
+    delete[] inputs; 
+    delete[] targets;
 
-    /*Tensor<9, 9> a = rand<9, 9>();
+    #if TEST_NET
+        cout << "\nTESTING..." << endl;
 
-    Tensor<9, 9> b = rand<9, 9>();
+        inputs = Load_MNIST_File("t10k-images.idx3-ubyte", nbTestImages);
+        targets = GetTargetValues("t10k-labels.idx1-ubyte", nbTestImages);
 
-    Tensor<9, 9> b_transposed = transpose(b);
+        cumulativeAccuracy = cumulativeLoss = 0.f;
 
-    cout << "b :" << endl;
-    print(b);
+        for (size_t i = 0; i < nbTestImages; ++i)
+        {
+            const auto& target = targets[i];
+            const auto& input = inputs[i];
 
-    cout << "\ntransposed of b :" << endl;
-    print(b_transposed);
+            Tensor<outputSize> prediction = network.forward(input);
 
+            Tensor<outputSize> error = prediction - target;
 
-    cout << "\nmul :" << endl;
-    print(mul(a, b));
+            cumulativeAccuracy += prediction.argmax() == target.argmax();
+            cumulativeLoss += (abs(error)).sum() / static_cast<float>(outputSize);
+        }
 
-    cout << "\nmul_transposed :" << endl;
-    print(mul_transposed(a, b_transposed));*/
+        cout << "Loss : " << cumulativeLoss / (float)nbTestImages << endl;
+        cout << "Accuracy : " << cumulativeAccuracy / (float)nbTestImages << endl;
 
+        delete[] inputs;
+        delete[] targets;
 
+    #endif
+
+    cout << "\nCOMPLETE !" << endl;
     system("pause");
     return 0;
 }

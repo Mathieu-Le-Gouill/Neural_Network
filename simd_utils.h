@@ -1,3 +1,5 @@
+#pragma once
+
 #include <immintrin.h>
 
 
@@ -33,9 +35,10 @@
 	#define _SUB(x,y) _mm256_sub_ps(x,y)
 	#define _MUL(x,y) _mm256_mul_ps(x,y)
 	#define _DIV(x,y) _mm256_div_ps(x,y)
-	#define _LOAD(x) _mm256_load_ps(x)
-	#define _STORE(x,y) _mm256_store_ps(x,y)
+	#define _LOAD(x) _mm256_loadu_ps(x)
+	#define _STORE(x,y) _mm256_storeu_ps(x,y)
 	#define _FMADD(x,y,z) _mm256_fmadd_ps(x,y,z)
+	#define _FNMADD(x,y,z) _mm256_fnmadd_ps(x,y,z)
 	#define _FMSUB(x,y,z) _mm256_fmsub_ps(x,y,z)
 	#define _MAX(x,y) _mm256_max_ps(x,y)
 	#define _CASTSI_PS(x) _mm256_castsi256_ps(x)
@@ -47,6 +50,7 @@
 	#define _MASKLOAD(x,y) _mm256_maskload_ps(x,y)
 	#define _RCP(x) _mm256_rcp_ps(x)
 	#define _MASKSTORE(x,y,z) _mm256_maskstore_ps(x,y,z)
+	#define _LOG(x) _mm256_log_ps(x)
 
 #else
 	#define PACKAGE_TYPE __m128
@@ -64,9 +68,10 @@
 	#define _SUB(x,y) _mm_sub_ps(x,y)
 	#define _MUL(x,y) _mm_mul_ps(x,y)
 	#define _DIV(x,y) _mm_div_ps(x,y)
-	#define _LOAD(x) _mm_load_ps(x)
-	#define _STORE(x,y) _mm_store_ps(x,y)
+	#define _LOAD(x) _mm_loadu_ps(x)
+	#define _STORE(x,y) _mm_storeu_ps(x,y)
 	#define _FMADD(x,y,z) _mm_fmadd_ps(x,y,z)
+	#define _FNMADD(x,y,z) _mm_fnmadd_ps(x,y,z)
 	#define _FMSUB(x,y,z) _mm_fmsub_ps(x,y,z)
 	#define _MAX(x,y) _mm_max_ps(x,y)
 	#define _CASTSI(x) _mm_castsi128_ps(x)
@@ -77,6 +82,7 @@
 	#define _RCP(x) _mm_rcp_ps(x)
 	#define _MASKLOAD(x,y) _mm_maskload_ps(x,y)
 	#define _MASKSTORE(x,y) _mm_maskstore_ps(x,y)
+	#define _LOG(x) _mm_log_ps(x)
 #endif
 
 // Compute the sum of a vector of 4 floats

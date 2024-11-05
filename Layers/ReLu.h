@@ -2,30 +2,32 @@
 #include "Layer.h"
 
 template <::std::size_t... inputDims>
-class ReLu : public Layer< Tensor<inputDims...>, Tensor<inputDims...>>
+class ReLU : public Layer< ReLU<inputDims...>, Tensor<inputDims...>, Tensor<inputDims...>>
 {
     using inputType = Tensor<inputDims...>;
     using outputType = Tensor<inputDims...>;
 
 public:
 
-    constexpr ReLu() {}
+    constexpr ReLU() {}
 
-    inline outputType Forward(inputType& input) override
+    inline outputType Forward(inputType& input) noexcept
     {
-        input.apply_ReLu();
+        inputType output = std::move(input);
+        output.apply_ReLU();
 
-        return input;
+        return output;
     }
 
-    inline inputType Backward(outputType& input) override
+    inline inputType Backward(outputType& input)  noexcept
     {
-        input.apply_ReLu_derivative();
+        outputType output = std::move(input);
+        output.apply_ReLU_derivative();
 
-        return std::move(input);
+        return output;
     }
 
-    inline void Update() override
+    inline void Update() noexcept
     {
 	}
 

@@ -1,15 +1,27 @@
 #pragma once
 #include "Tensor.h"
+#include "../network_parameters.h"
 
-template <typename input, typename output>
+template <typename child, typename input, typename output>
 class Layer
 {
 public:
 
-    virtual output Forward(input& tensor) = 0;
+    constexpr virtual ~Layer() = default;
 
-    virtual input Backward(output& tensor) = 0;
+    inline auto Forward(input& tensor)
+    {
+        return static_cast<child*>(this)->Forward(tensor);
+    }
 
-    virtual void Update() = 0;
+    inline auto Backward(output& tensor)
+    {
+        return static_cast<child*>(this)->Backward(tensor);
+    }
+
+    inline void Update() 
+    {
+        static_cast<child*>(this)->Update();
+    }
 };
 

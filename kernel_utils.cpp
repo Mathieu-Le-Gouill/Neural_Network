@@ -1,7 +1,7 @@
 #pragma once
 #include "Tensor.h"
 
-constexpr enum Kernel_Initializer 
+enum Kernel_Initializer 
 {
     Glorot_Normal,
     Glorot_Uniform,

@@ -2,7 +2,7 @@
 #include "Layer.h"
 
 template <::std::size_t... inputDims>
-class Flatten : public Layer< Tensor<inputDims...>, Tensor<(1 * ... * inputDims)>>
+class Flatten : public Layer< Flatten<inputDims...>, Tensor<inputDims...>, Tensor<(1 * ... * inputDims)>>
 {
     static constexpr ::std::size_t outputSize = (1 * ... * inputDims);
 
@@ -13,17 +13,17 @@ public:
 
     constexpr Flatten() {}
 
-    inline outputType Forward(inputType& input) override
+    inline outputType Forward(inputType& input)
     {
-        return input.flatten();
+        return std::move(input).flatten();
     }
 
-    inline inputType Backward(outputType& input) override
+    inline inputType Backward(outputType& input)
     {
-        return input.reshape<inputDims...>();
+        return std::move(input).reshape<inputDims...>();
     }
 
-    inline void Update() override
+    inline void Update()
     {
     }
 };
