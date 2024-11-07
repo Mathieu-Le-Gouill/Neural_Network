@@ -1,6 +1,8 @@
-#pragma once
 #include "Tensor.h"
 
+#ifndef _CMP_GT_OQ
+    #define _CMP_GT_OQ 30
+#endif
 
 // ------ TENSORS LAYERS FUNCTIONS -------
 
@@ -20,7 +22,7 @@ void Tensor<Dimensions...>::apply_sigmoid()
 
     /*
     const PACKAGE_TYPE set0 = _SETZERO();
-    const PACKAGE_TYPE set1 = _SET1(1.f);
+    const PACKAGE_TYPE set1 = _SET1_PS(1.f);
 
     size_t i = 0;
 
@@ -29,7 +31,7 @@ void Tensor<Dimensions...>::apply_sigmoid()
     {
         const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
 
-        const PACKAGE_TYPE expValues = _EXP( _SUB(set0, packedValues));  // Compute exponent
+        const PACKAGE_TYPE expValues = _EXP( _SUB_PS(set0, packedValues));  // Compute exponent
 		const PACKAGE_TYPE sigmoid = _RCP( _ADD(set1, expValues)); // Compute sigmoid
 
         _STORE(_values + i, sigmoid); // Store values in memory
@@ -39,7 +41,7 @@ void Tensor<Dimensions...>::apply_sigmoid()
     {
         const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
 
-		const PACKAGE_TYPE expValues = _EXP( _SUB(set0, packedValues));  // Compute exponent
+		const PACKAGE_TYPE expValues = _EXP( _SUB_PS(set0, packedValues));  // Compute exponent
 		const PACKAGE_TYPE sigmoid = _RCP( _ADD(set1, expValues)); // Compute sigmoid
 
         _MASKSTORE(_values + i, remainderMaskSI<_offset>(), sigmoid); // Store values in memory
@@ -51,23 +53,23 @@ void Tensor<Dimensions...>::apply_sigmoid()
 template<::std::size_t ...Dimensions>
 void Tensor<Dimensions...>::apply_ReLU()
 {
-    const PACKAGE_TYPE zeros = _SETZERO();
+    const PACKAGE_FLOAT zeros = _SETZERO();
 
     size_t i = 0;
 
     #pragma omp parallel for schedule(dynamic)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-        _STORE(_values + i, _MAX(packedValues, zeros)); // Store values in memory
+        _STORE(_values + i, _MAX_PS(packedValues, zeros)); // Store values in memory
 	}
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-        _MASKSTORE(_values + i, remainderMaskSI<_offset>(), _MAX(packedValues, zeros)); // Store values in memory
+        _MASKSTORE(_values + i, remainderMaskSI<_offset>(), _MAX_PS(packedValues, zeros)); // Store values in memory
     }
 }
 
@@ -76,25 +78,25 @@ void Tensor<Dimensions...>::apply_ReLU()
 template<::std::size_t ...Dimensions>
 void Tensor<Dimensions...>::apply_ReLU_derivative()
 {
-    const PACKAGE_TYPE zeros = _SETZERO();
+    const PACKAGE_FLOAT zeros = _SETZERO();
 
     size_t i = 0;
 
     #pragma omp parallel for schedule(dynamic)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-        const PACKAGE_TYPE mask = _CMP(packedValues, zeros, _CMP_GT_OQ); // Create mask
+        const PACKAGE_FLOAT mask = _CMPGT_PS(packedValues, zeros); // Create mask
 
         _STORE(_values + i, _AND(mask, packedValues)); // Store values in memory
 	}
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-		const PACKAGE_TYPE mask = _CMP(packedValues, zeros, _CMP_GT_OQ); // Create mask
+		const PACKAGE_FLOAT mask = _CMPGT_PS(packedValues, zeros); // Create mask
 
 		_MASKSTORE(_values + i, remainderMaskSI<_offset>(), _AND(mask, packedValues)); // Store values in memory
     }
@@ -111,24 +113,34 @@ void Tensor<Dimensions...>::apply_normalization()
     const float std = std::sqrt(this->variance(mean));
     const float sigmaReciprocal = 1.f / std;
 
-    PACKAGE_TYPE packedMean = _SET1(mean);
-    PACKAGE_TYPE packedSigmaReciprocal = _SET1(sigmaReciprocal);
+    PACKAGE_FLOAT packedMean = _SET1_PS(mean);
+    PACKAGE_FLOAT packedSigmaReciprocal = _SET1_PS(sigmaReciprocal);
 
     size_t i = 0;
 
     #pragma omp parallel for schedule(dynamic)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-        _STORE(_values + i, _FMSUB(packedValues, packedSigmaReciprocal, packedMean)); // Normalize
+        #ifdef __FMA__
+            const PACKAGE_FLOAT result = _FMSUB(packedValues, packedSigmaReciprocal, packedMean); // Normalize
+        #else
+            const PACKAGE_FLOAT result = _SUB_PS(_MUL(packedValues, packedSigmaReciprocal), packedMean); // Normalize
+        #endif
+
+        _STORE(_values + i, result);
 	}
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-        const PACKAGE_TYPE result = _FMSUB(packedValues, packedSigmaReciprocal, packedMean);
+        #ifdef __FMA__
+            const PACKAGE_FLOAT result = _FMSUB(packedValues, packedSigmaReciprocal, packedMean); // Normalize
+        #else
+            const PACKAGE_FLOAT result = _SUB_PS(_MUL(packedValues, packedSigmaReciprocal), packedMean); // Normalize
+        #endif
 
         _MASKSTORE(_values + i, remainderMaskSI<_offset>(), result); // Store values in memory
     }
@@ -142,33 +154,43 @@ void Tensor<Dimensions...>::norm_shift_and_scale(float mean, float variance, flo
     debug_assert(variance != 0 && "Error in Tensor apply_shift_and_scale : the given variance is null.");
 
     // Maybe there is a better way to compute sigma reciprocal
-    const float sigmaReciprocal = 1.f / std::sqrtf(variance);
+    const float sigmaReciprocal = 1.f / sqrtf(variance);
 
-    PACKAGE_TYPE packedShift = _SET1(shift);
-    PACKAGE_TYPE packedScale = _SET1(scale);
+    PACKAGE_FLOAT packedShift = _SET1_PS(shift);
+    PACKAGE_FLOAT packedScale = _SET1_PS(scale);
 
-    PACKAGE_TYPE packedMean = _SET1(mean);
-    PACKAGE_TYPE packedSigmaReciprocal = _SET1(sigmaReciprocal);
+    PACKAGE_FLOAT packedMean = _SET1_PS(mean);
+    PACKAGE_FLOAT packedSigmaReciprocal = _SET1_PS(sigmaReciprocal);
 
     size_t i = 0;
 
     #pragma omp parallel for schedule(dynamic)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
-
-        const PACKAGE_TYPE norm = _FMSUB(packedValues, packedSigmaReciprocal, packedMean); // Normalize
-        const PACKAGE_TYPE result = _FMADD(norm, packedScale, packedShift); // Scale and shift
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
+        
+        #ifdef __FMA__
+            const PACKAGE_FLOAT norm = _FMSUB(packedValues, packedSigmaReciprocal, packedMean); // Normalize
+            const PACKAGE_FLOAT result = _FMADD(norm, packedScale, packedShift); // Scale and shift
+        #else
+            const PACKAGE_FLOAT norm = _SUB_PS(_MUL(packedValues, packedSigmaReciprocal), packedMean); // Normalize
+            const PACKAGE_FLOAT result = _ADD_PS(_MUL(norm, packedScale), packedShift); // Scale and shift
+        #endif
 
         _STORE(_values + i, result); // Store values in memory
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-        const PACKAGE_TYPE norm = _FMSUB(packedValues, packedSigmaReciprocal, packedMean); // Normalize
-        const PACKAGE_TYPE result = _FMADD(norm, packedScale, packedShift); // Scale and shift
+        #ifdef __FMA__
+            const PACKAGE_FLOAT norm = _FMSUB(packedValues, packedSigmaReciprocal, packedMean); // Normalize
+            const PACKAGE_FLOAT result = _FMADD(norm, packedScale, packedShift); // Scale and shift
+        #else
+            const PACKAGE_FLOAT norm = _SUB_PS(_MUL(packedValues, packedSigmaReciprocal), packedMean); // Normalize
+            const PACKAGE_FLOAT result = _ADD_PS(_MUL(norm, packedScale), packedShift); // Scale and shift
+        #endif
 
         _MASKSTORE(_values + i, remainderMaskSI<_offset>(), result); // Store values in memory
     }
@@ -185,7 +207,7 @@ Tensor<Dimensions...> Tensor<Dimensions...>::apply_dropout(float rate)
     Tensor<Dimensions...> dropoutMask;
     dropoutMask.init();
 
-	const PACKAGE_TYPE packedRate = _SET1(rate);
+	const PACKAGE_FLOAT packedRate = _SET1_PS(rate);
 
     auto seed = (unsigned)std::chrono::system_clock::now().time_since_epoch().count();// To get differents epochs 
     std::default_random_engine generator(seed);// Create a generator of random numbers
@@ -198,14 +220,11 @@ Tensor<Dimensions...> Tensor<Dimensions...>::apply_dropout(float rate)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         // Generate random values between 0 and 1
-        const PACKAGE_TYPE randomValues = _mm256_set_ps(distribution(generator), distribution(generator),
-                                                        distribution(generator), distribution(generator),
-                                                        distribution(generator), distribution(generator),
-                                                        distribution(generator), distribution(generator));
+        const PACKAGE_FLOAT randomValues = _RAND(generator, distribution);
 
-        const PACKAGE_TYPE mask = _CMP(randomValues, packedRate, _CMP_GT_OQ); // Create mask
+        const PACKAGE_FLOAT mask = _CMPGT_PS(randomValues, packedRate); // Create mask
 
-        const PACKAGE_TYPE packedValues = _LOAD(this->_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(this->_values + i); // Load values from memory
 
         _STORE(this->_values + i, _AND(packedValues, mask)); // Store values in memory
 
@@ -215,14 +234,11 @@ Tensor<Dimensions...> Tensor<Dimensions...>::apply_dropout(float rate)
     if constexpr (_offset)
     {
         // Generate random values between 0 and 1
-        const PACKAGE_TYPE randomValues = _mm256_set_ps(distribution(generator), distribution(generator),
-                                                        distribution(generator), distribution(generator),
-                                                        distribution(generator), distribution(generator),
-                                                        distribution(generator), distribution(generator));
+        const PACKAGE_FLOAT randomValues = _RAND(generator, distribution);
 
-		const PACKAGE_TYPE mask = _CMP(randomValues, packedRate, _CMP_GT_OQ); // Create mask
+		const PACKAGE_FLOAT mask = _CMPGT_PS(randomValues, packedRate); // Create mask
 
-        const PACKAGE_TYPE packedValues = _LOAD(this->_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(this->_values + i); // Load values from memory
 
         _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _AND(packedValues, mask)); // Store values in memory
 
@@ -242,16 +258,16 @@ void Tensor<Dimensions...>::apply_mask(const Tensor<Dimensions...>& mask)
     #pragma omp parallel for schedule(dynamic)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
-		const PACKAGE_TYPE packedMask = _LOAD(mask._values + i); // Load mask from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
+		const PACKAGE_FLOAT packedMask = _LOAD(mask._values + i); // Load mask from memory
 
 		_STORE(_values + i, _AND(packedValues, packedMask)); // Apply mask
 	}
 
     if constexpr (_offset)
     {
-		const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
-        const PACKAGE_TYPE packedMask = _LOAD(mask._values + i); // Load mask from memory
+		const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedMask = _LOAD(mask._values + i); // Load mask from memory
 
         _MASKSTORE(_values + i, remainderMaskSI<_offset>(), _AND(packedValues, packedMask)); // Apply mask
 	}
@@ -264,69 +280,69 @@ void Tensor<Dimensions...>::apply_Softmax()
     const float maxValue = this->max(); // max values of the tensor
 
     // Compute sum
-    const PACKAGE_TYPE packedMax = _SET1(maxValue);
+    const PACKAGE_FLOAT packedMax = _SET1_PS(maxValue);
 
-    PACKAGE_TYPE packedSum;
+    PACKAGE_FLOAT packedSum;
 
     if constexpr (_size >= PACKAGE_LENGTH)
     {
-        packedSum = _EXP( _SUB( _LOAD(_values), packedMax));  // Compute exponent
+        packedSum = _EXP( _SUB_PS( _LOAD(_values), packedMax));  // Compute exponent
 
         size_t i = PACKAGE_LENGTH;
 
         #pragma omp parallel for schedule(dynamic)
         for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+            const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-            const PACKAGE_TYPE expValues = _EXP( _SUB(packedValues, packedMax));  // Compute exponent
+            const PACKAGE_FLOAT expValues = _EXP( _SUB_PS(packedValues, packedMax));  // Compute exponent
 
-			packedSum = _ADD(expValues, packedSum);
+			packedSum = _ADD_PS(expValues, packedSum);
         }
 
         if constexpr (_offset)
         {
-            const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+            const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-            const PACKAGE_TYPE expValues = _EXP( _SUB(packedValues, packedMax));  // Compute exponent
+            const PACKAGE_FLOAT expValues = _EXP( _SUB_PS(packedValues, packedMax));  // Compute exponent
 
-            const PACKAGE_TYPE maskedValues = _AND(expValues, remainderMask<_offset>()); // Apply mask
+            const PACKAGE_FLOAT maskedValues = _AND(expValues, remainderMask<_offset>()); // Apply mask
 
-            packedSum = _ADD(maskedValues, packedSum);
+            packedSum = _ADD_PS(maskedValues, packedSum);
         }
     }
     else
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values); // Load values from memory
 
-        const PACKAGE_TYPE expValues = _EXP( _SUB(packedValues, packedMax));  // Compute exponent
+        const PACKAGE_FLOAT expValues = _EXP( _SUB_PS(packedValues, packedMax));  // Compute exponent
 
         packedSum = _AND(expValues, remainderMask<_offset>());
     }
 
-    const float totalSum = horizontal_sum8(packedSum); // Sum all values
+    const float totalSum = _HSUM(packedSum); // Sum all values
 
-    PACKAGE_TYPE packedRCPSum = _SET1(1.f/totalSum);
+    PACKAGE_FLOAT packedRCPSum = _SET1_PS(1.f/totalSum);
 
     size_t i = 0;
 
     #pragma omp parallel for schedule(dynamic)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-		const PACKAGE_TYPE expValues = _EXP( _SUB(packedValues, packedMax));  // Compute exponent
-		const PACKAGE_TYPE softmax = _MUL(expValues, packedRCPSum); // Compute softmax
+		const PACKAGE_FLOAT expValues = _EXP( _SUB_PS(packedValues, packedMax));  // Compute exponent
+		const PACKAGE_FLOAT softmax = _MUL(expValues, packedRCPSum); // Compute softmax
 
         _STORE(_values + i, softmax); // Store values in memory
 	}
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values + i); // Load values from memory
+        const PACKAGE_FLOAT packedValues = _LOAD(_values + i); // Load values from memory
 
-        const PACKAGE_TYPE expValues = _EXP(_SUB(packedValues, packedMax));  // Compute exponent
-        const PACKAGE_TYPE softmax = _MUL(expValues, packedRCPSum); // Compute softmax
+        const PACKAGE_FLOAT expValues = _EXP(_SUB_PS(packedValues, packedMax));  // Compute exponent
+        const PACKAGE_FLOAT softmax = _MUL(expValues, packedRCPSum); // Compute softmax
 
         _MASKSTORE(_values + i, remainderMaskSI<_offset>(), softmax); // Store values in memory
 	}
@@ -368,11 +384,11 @@ float Cross_Entropy_loss(const Tensor<Dimensions...>& prediction, const Tensor<D
     constexpr size_t offset = Tensor<Dimensions...>::_offset;
     constexpr size_t size = Tensor<Dimensions...>::_size;
 
-    PACKAGE_TYPE packedSum;
+    PACKAGE_FLOAT packedSum;
 
     if constexpr (size >= PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE log = _LOG( _LOAD(prediction._values)); // Load labels from memory
+        const PACKAGE_FLOAT log = _LOG( _LOAD(prediction._values)); // Load labels from memory
 
         packedSum = _MUL( _LOAD(labels._values), log);
 
@@ -381,33 +397,41 @@ float Cross_Entropy_loss(const Tensor<Dimensions...>& prediction, const Tensor<D
         #pragma omp parallel for schedule(dynamic)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE labelsValues = _LOAD(labels._values + i); // Load labels from memory
-            const PACKAGE_TYPE predictionValues = _LOAD(prediction._values + i); // Load prediction from memory
+            const PACKAGE_FLOAT labelsValues = _LOAD(labels._values + i); // Load labels from memory
+            const PACKAGE_FLOAT predictionValues = _LOAD(prediction._values + i); // Load prediction from memory
 
-            packedSum = _FMADD(labelsValues, _LOG(predictionValues), packedSum); // Compute loss
+            #ifdef __FMA__
+                const PACKAGE_FLOAT values = _FMADD(labelsValues, _LOG(predictionValues), packedSum); // Compute loss
+            #else
+                const PACKAGE_FLOAT packedSum = _ADD_PS(_MUL(labelsValues, _LOG(predictionValues)), packedSum);
+            #endif
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE labelsValues = _MASKLOAD(labels._values + i, remainderMaskSI<offset>()); // Load labels from memory
-            const PACKAGE_TYPE predictionValues = _LOG(prediction._values + i); // Load prediction from memory
+            const PACKAGE_FLOAT labelsValues = _MASKLOAD(labels._values + i, remainderMaskSI<offset>()); // Load labels from memory
+            const PACKAGE_FLOAT predictionValues = _LOG(prediction._values + i); // Load prediction from memory
 
-            const PACKAGE_TYPE maskedPredictionsLog = _AND( _LOG(predictionValues), remainderMask<offset>()); // Apply mask on the log of the prediction
+            const PACKAGE_FLOAT maskedPredictionsLog = _AND( _LOG(predictionValues), remainderMask<offset>()); // Apply mask on the log of the prediction
 
-            packedSum = _FMADD(labelsValues, maskedPredictionsLog, packedSum); // Compute loss
+            #ifdef __FMA__
+                const PACKAGE_FLOAT values = _FMADD(labelsValues, maskedPredictionsLog, packedSum); // Compute loss
+            #else
+                const PACKAGE_FLOAT packedSum = _ADD_PS(_MUL(labelsValues, maskedPredictionsLog), packedSum);
+            #endif
         }
     }
     else 
     {
-        const PACKAGE_TYPE labelsValues = _LOAD(labels._values); // Load labels from memory
-		const PACKAGE_TYPE predictionValues = _LOAD(prediction._values); // Load prediction from memory
+        const PACKAGE_FLOAT labelsValues = _LOAD(labels._values); // Load labels from memory
+		const PACKAGE_FLOAT predictionValues = _LOAD(prediction._values); // Load prediction from memory
 
-		const PACKAGE_TYPE values = _MUL(labelsValues, _LOG(predictionValues));
+		const PACKAGE_FLOAT values = _MUL(labelsValues, _LOG(predictionValues));
 
 		packedSum = _AND(values, remainderMask<offset>()); // Apply mask
 	}
 
-	const float ce = horizontal_sum8(packedSum); // Sum all values
+	const float ce = _HSUM(packedSum); // Sum all values
 
 	return -ce;
 }

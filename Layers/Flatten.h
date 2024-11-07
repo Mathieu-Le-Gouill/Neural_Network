@@ -20,7 +20,7 @@ public:
 
     inline inputType Backward(outputType& input)
     {
-        return std::move(input).reshape<inputDims...>();
+        return std::move(input).template reshape<inputDims...>();
     }
 
     inline void Update()

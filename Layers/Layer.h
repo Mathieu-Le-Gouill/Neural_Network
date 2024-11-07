@@ -1,5 +1,5 @@
 #pragma once
-#include "Tensor.h"
+#include "../Tensor.h"
 #include "../network_parameters.h"
 
 template <typename child, typename input, typename output>
@@ -7,7 +7,7 @@ class Layer
 {
 public:
 
-    constexpr virtual ~Layer() = default;
+    virtual ~Layer() = default;
 
     inline auto Forward(input& tensor)
     {

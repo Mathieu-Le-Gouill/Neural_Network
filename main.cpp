@@ -101,6 +101,5 @@ int main()
     #endif
 
     cout << "\nCOMPLETE !" << endl;
-    system("pause");
     return 0;
 }

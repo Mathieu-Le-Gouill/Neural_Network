@@ -1,4 +1,3 @@
-#pragma once
 #include "Tensor.h"
 
 enum Kernel_Initializer 
@@ -20,7 +19,7 @@ namespace Tensor_Init
     template <::std::size_t numInput, ::std::size_t numOutput>
     inline Tensor<numInput, numOutput> glorot_normal()
     {
-        return normal<numInput, numOutput>(0.0f, std::sqrtf(2.f / (float)(numInput + numOutput)));
+        return normal<numInput, numOutput>(0.0f, sqrtf(2.f / (float)(numInput + numOutput)));
     }
 
 
@@ -29,7 +28,7 @@ namespace Tensor_Init
     template <::std::size_t numInput, ::std::size_t numOutput>
     inline Tensor<numInput, numOutput> glorot_uniform()
     {
-        return normal<numInput, numOutput>(0.0f, std::sqrtf(6.f / (float)(numInput + numOutput)));
+        return normal<numInput, numOutput>(0.0f, sqrtf(6.f / (float)(numInput + numOutput)));
     }
 
 
@@ -37,7 +36,7 @@ namespace Tensor_Init
     template <::std::size_t numInput, ::std::size_t numOutput>
     inline Tensor<numInput, numOutput> he_normal()
     {
-        return normal<numInput, numOutput>(0.0f, std::sqrtf(2.f / (float)(numInput)));
+        return normal<numInput, numOutput>(0.0f, sqrtf(2.f / (float)(numInput)));
     }
 
 
@@ -45,7 +44,7 @@ namespace Tensor_Init
     template <::std::size_t numInput, ::std::size_t numOutput>
     inline Tensor<numInput, numOutput> he_uniform()
     {
-        return normal<numInput, numOutput>(0.0f, std::sqrtf(6.f / (float)(numInput)));
+        return normal<numInput, numOutput>(0.0f, sqrtf(6.f / (float)(numInput)));
     }
 
 
@@ -53,7 +52,7 @@ namespace Tensor_Init
     template <::std::size_t numInput, ::std::size_t numOutput>
     inline Tensor<numInput, numOutput> lecun_normal()
     {
-        return normal<numInput, numOutput>(0.0f, std::sqrtf(1.f / (float)(numInput)));
+        return normal<numInput, numOutput>(0.0f, sqrtf(1.f / (float)(numInput)));
     }
 
 
@@ -61,7 +60,7 @@ namespace Tensor_Init
     template <::std::size_t numInput, ::std::size_t numOutput>
     inline Tensor<numInput, numOutput> lecun_uniform()
     {
-        return normal<numInput, numOutput>(0.0f, std::sqrtf(3.f / (float)(numInput)));
+        return normal<numInput, numOutput>(0.0f, sqrtf(3.f / (float)(numInput)));
     }
 };
 

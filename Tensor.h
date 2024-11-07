@@ -1,8 +1,7 @@
 #pragma once
 #include <iostream>
-#include "simd_utils.h"
 #include "debug.h"
-
+#include "simd_utils.h"
 #include <stdio.h>
 #include "network_parameters.h"
 #include <array>
@@ -28,6 +27,8 @@ void print(const Tensor<Dimensions...>& tensor, float numDecimals = 2.f);
 template <std::size_t... Dimensions>
 class Tensor 
 {
+private :
+
     // Total size of the tensor
     static constexpr std::size_t _size = (1 * ... * Dimensions);
 
@@ -37,6 +38,9 @@ class Tensor
     // The number of elements which cannot fit in a package
     static constexpr uint16_t _offset = _size % PACKAGE_LENGTH;
 
+    static constexpr size_t UNROLL_FACTOR = (_size >= 16 * PACKAGE_LENGTH) ? 16 :
+                                            (_size >= 8 * PACKAGE_LENGTH) ? 8 :
+                                            (_size >= 4 * PACKAGE_LENGTH) ? 4 : 1;
 
 public:
 
@@ -47,19 +51,15 @@ public:
     // Default constructor
     constexpr Tensor();
 
-
     // Copy constructor
     constexpr Tensor(const Tensor<Dimensions...>& other);
-
 
     // Rvalue assignement constructor
     constexpr Tensor(Tensor<Dimensions...>&& other) noexcept;
 
-
     // Assignement constructor for a different dimensions Tensor of the same size
     template <std::size_t... OtherDimensions>
     constexpr Tensor(const Tensor<OtherDimensions...>& other);
-
 
     // Rvalue assignement constructor for a different dimensions Tensor of the same size
     template <std::size_t... OtherDimensions>
@@ -70,28 +70,26 @@ public:
     // Fill constructor with a given value
     constexpr Tensor(float value);
 
-
     // Fill the tensor from an initializer list
     constexpr Tensor(std::initializer_list<float> values);
-
 
     // Fill the tensor from a float array
     constexpr Tensor(float values[_size]);
 
 
-    // Fill Tensors with zeros
-    template <std::size_t... Dimensions>
-    friend Tensor<Dimensions...> zeros();
 
+    // Fill Tensors with zeros
+    template <std::size_t... Dims>
+    friend Tensor<Dims...> zeros();
 
     // Fill Tensors with ones
-    template <std::size_t... Dimensions>
-    friend Tensor<Dimensions...> ones();
-
+    template <std::size_t... Dims>
+    friend Tensor<Dims...> ones();
 
     // Fill Tensors with random values with a distribution based on the given mean and the standard deviation
-    template <std::size_t... Dimensions>
-    friend Tensor<Dimensions...> normal(float mean, float std);
+    template <std::size_t... Dims>
+    friend Tensor<Dims...> normal(float mean, float std);
+
 
 
     // Fill Tensors with random values with the Glorot also named Xavier normal distribution
@@ -146,7 +144,7 @@ public:
     // Element-wise addition with a float
     constexpr Tensor<Dimensions...> operator+(float value) const &;
 
-    // Element-wise substraction with a float
+    // Element-wise subtraction with a float
     constexpr Tensor<Dimensions...> operator-(float value) const &;
 
     // Element-wise multiplication with a float
@@ -160,7 +158,7 @@ public:
     // Element-wise addition with a float
     constexpr Tensor<Dimensions...> operator+(float value) &&;
 
-    // Element-wise substraction with a float
+    // Element-wise subtraction with a float
     constexpr Tensor<Dimensions...> operator-(float value) &&;
 
     // Element-wise multiplication with a float
@@ -174,7 +172,7 @@ public:
     // Element-wise addition with a Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator+(const Tensor<Dimensions...>& tensor) const &;
 
-    // Element-wise substraction with a Tensor of the same dimensions
+    // Element-wise subtraction with a Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator-(const Tensor<Dimensions...>& tensor) const &;
 
     // Element-wise multiplication with a Tensor of the same dimensions
@@ -184,10 +182,11 @@ public:
     constexpr Tensor<Dimensions...> operator/(const Tensor<Dimensions...>& tensor) const &;
 
 
+
     // Element-wise addition with a Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator+(const Tensor<Dimensions...>& tensor) &&;
 
-    // Element-wise substraction with a Tensor of the same dimensions
+    // Element-wise subtraction with a Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator-(const Tensor<Dimensions...>& tensor) &&;
 
     // Element-wise multiplication with a Tensor of the same dimensions
@@ -197,10 +196,11 @@ public:
     constexpr Tensor<Dimensions...> operator/(const Tensor<Dimensions...>& tensor) &&;
 
 
+
     // Element-wise addition with a rvalue Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator+(Tensor<Dimensions...>&& tensor) const &;
 
-    // Element-wise substraction with a rvalue Tensor of the same dimensions
+    // Element-wise subtraction with a rvalue Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator-(Tensor<Dimensions...>&& tensor) const &;
 
     // Element-wise multiplication with a rvalue Tensor of the same dimensions
@@ -210,10 +210,11 @@ public:
     constexpr Tensor<Dimensions...> operator/(Tensor<Dimensions...>&& tensor) const &;
 
 
+
     // Element-wise addition with a rvalue Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator+(Tensor<Dimensions...>&& tensor) &&;
 
-    // Element-wise substraction with a rvalue Tensor of the same dimensions
+    // Element-wise subtraction with a rvalue Tensor of the same dimensions
     constexpr Tensor<Dimensions...> operator-(Tensor<Dimensions...>&& tensor) &&;
 
     // Element-wise multiplication with a rvalue Tensor of the same dimensions
@@ -227,7 +228,7 @@ public:
     // Element-wise addition of the tensor with another tensor of the same dimensions
     constexpr void operator+=(const Tensor<Dimensions...>& tensor);
 
-    // Element-wise substraction of the tensor with another tensor of the same dimensions
+    // Element-wise subtraction of the tensor with another tensor of the same dimensions
     constexpr void operator-=(const Tensor<Dimensions...>& tensor);
 
     // Element-wise multiplication of the tensor with another tensor of the same dimensions
@@ -239,63 +240,78 @@ public:
 
     // ------ TENSORS ACCESSORS -------
 
+
     // Access the tensor values
     constexpr float& operator()(std::size_t index) const;
 
     constexpr bool operator==(const Tensor<Dimensions...>& tensor) const;
+
     
-    // ------ TENSORS IN BATCHES OPERATORS -------
+    // ------ TENSORS BATCHES OPERATORS -------
 
 
-    // Element-wise addition with a Tensor of the same dimensions
-    constexpr Tensor<Dimensions..., minibatchSize> operator+(const Tensor<Dimensions..., minibatchSize>& tensor) const;
+    // Element-wise addition with each tensors batches
+    template<std::size_t batch_size>
+    constexpr Tensor<Dimensions..., batch_size> operator+(const Tensor<Dimensions..., batch_size>& tensor) const;
 
-    // Element-wise substraction with a Tensor of the same dimensions
-    constexpr Tensor<Dimensions..., minibatchSize> operator-(const Tensor<Dimensions..., minibatchSize>& tensor) const;
+    // Element-wise subtraction with each tensors batches
+    template<std::size_t batch_size>
+    constexpr Tensor<Dimensions..., batch_size> operator-(const Tensor<Dimensions..., batch_size>& tensor) const;
 
-    // Element-wise multiplication with a Tensor of the same dimensions
-    constexpr Tensor<Dimensions..., minibatchSize> operator*(const Tensor<Dimensions..., minibatchSize>& tensor) const;
+    // Element-wise multiplication with each tensors batches
+    template<std::size_t batch_size>
+    constexpr Tensor<Dimensions..., batch_size> operator*(const Tensor<Dimensions..., batch_size>& tensor) const;
 
-    // Element-wise division with a Tensor of the same dimensions
-    constexpr Tensor<Dimensions..., minibatchSize> operator/(const Tensor<Dimensions..., minibatchSize>& tensor) const;
-
-
-
-    // Element-wise addition with a rvalue Tensor of the same dimensions
-    constexpr Tensor<Dimensions..., minibatchSize> operator+(Tensor<Dimensions..., minibatchSize>&& tensor) const;
-
-    // Element-wise substraction with a rvalue Tensor of the same dimensions
-    constexpr Tensor<Dimensions..., minibatchSize> operator-(Tensor<Dimensions..., minibatchSize>&& tensor) const;
-
-    // Element-wise multiplication with a rvalue Tensor of the same dimensions
-    constexpr Tensor<Dimensions..., minibatchSize> operator*(Tensor<Dimensions..., minibatchSize>&& tensor) const;
-
-    // Element-wise division with a rvalue Tensor of the same dimensions
-    constexpr Tensor<Dimensions..., minibatchSize> operator/(Tensor<Dimensions..., minibatchSize>&& tensor) const;
+    // Element-wise division with each tensors batches
+    template<std::size_t batch_size>
+    constexpr Tensor<Dimensions..., batch_size> operator/(const Tensor<Dimensions..., batch_size>& tensor) const;
 
 
 
-    // Element-wise addition of the tensor with another tensor of the same dimensions
-    constexpr void operator+=(const Tensor<Dimensions..., minibatchSize>& tensor);
-    // Element-wise substraction of the tensor with another tensor of the same dimensions
-    constexpr void operator-=(const Tensor<Dimensions..., minibatchSize>& tensor);
+    // Element-wise addition with each tensors batches rvalue Tensor
+    template<std::size_t batch_size>
+    constexpr Tensor<Dimensions..., batch_size> operator+(Tensor<Dimensions..., batch_size>&& tensor) const;
 
-    // Element-wise multiplication of the tensor with another tensor of the same dimensions
-    constexpr void operator*=(const Tensor<Dimensions..., minibatchSize>& tensor);
+    // Element-wise subtraction with each tensors batches rvalue Tensor
+    template<std::size_t batch_size>
+    constexpr Tensor<Dimensions..., batch_size> operator-(Tensor<Dimensions..., batch_size>&& tensor) const;
 
-    // Element-wise division of the tensor with another tensor of the same dimensions
-    constexpr void operator/=(const Tensor<Dimensions..., minibatchSize>& tensor);
+    // Element-wise multiplication with each tensors batches rvalue Tensor
+    template<std::size_t batch_size>
+    constexpr Tensor<Dimensions..., batch_size> operator*(Tensor<Dimensions..., batch_size>&& tensor) const;
+
+    // Element-wise division with each tensors batches rvalue Tensor
+    template<std::size_t batch_size>
+    constexpr Tensor<Dimensions..., batch_size> operator/(Tensor<Dimensions..., batch_size>&& tensor) const;
+
+
+    // Element-wise addition of the tensor with each tensors batches
+    template<std::size_t batch_size>
+    constexpr void operator+=(const Tensor<Dimensions..., batch_size>& tensor);
+
+    // Element-wise subtraction of the tensor with each tensors batches
+    template<std::size_t batch_size>
+    constexpr void operator-=(const Tensor<Dimensions..., batch_size>& tensor);
+
+    // Sum of Element-wise multiplication of the tensor with each tensors batches
+    template<std::size_t batch_size>
+    constexpr void operator*=(const Tensor<Dimensions..., batch_size>& tensor);
+
+    // Sum of Element-wise division of the tensor with each tensors batches
+    template<std::size_t batch_size>
+    constexpr void operator/=(const Tensor<Dimensions..., batch_size>& tensor);
 
 
     // ------ TENSORS BASIC FUNCTIONS -------
 
 
     // To print the tensor elements
-    template<std::size_t ...Dimensions>
-    friend void print(const Tensor<Dimensions...>& tensor, float numDecimals);
+    template<std::size_t ...Dims>
+    friend void print(const Tensor<Dims...>& tensor, float numDecimals);
 
     // To get the shape of the tensor
-    constexpr std::string shape() const;
+    template<std::size_t ...Dims>
+    friend void show_shape(const Tensor<Dims...>& tensor);
 
 
     // Reshape the dimensions of the tensor to a compatible one
@@ -317,8 +333,8 @@ public:
 
 
     // Compute the absolute value of each element in the tensor
-    template<std::size_t ...Dimensions>
-    friend Tensor<Dimensions...> abs(const Tensor<Dimensions...>& tensor);
+    template<std::size_t ...Dims>
+    friend Tensor<Dims...> abs(const Tensor<Dims...>& tensor);
 
     
     // Compute the sum of each values in the tensor
@@ -343,18 +359,18 @@ public:
 
     // ------ TENSORS MATRIX OPERATIONS -------
 
-
+    #ifdef __FMA__
     // Element-wise addition between tensorC and the element-wise multiplication of tensorA and tensorB
     // @return tensorA * tensorB + tensorC
-    template<std::size_t ...Dimensions>
-    friend Tensor<Dimensions...> multiply_and_add(const Tensor<Dimensions...>& tensorA, const Tensor<Dimensions...>& tensorB, const Tensor<Dimensions...>& tensorC);
+    template<std::size_t ...Dims>
+    friend Tensor<Dims...> multiply_and_add(const Tensor<Dims...>& tensorA, const Tensor<Dims...>& tensorB, const Tensor<Dims...>& tensorC);
 
 
-    // Element-wise substraction between tensorC and the element-wise multiplication of tensorA and tensorB
+    // Element-wise subtraction between tensorC and the element-wise multiplication of tensorA and tensorB
     // @return tensorA * tensorB - tensorC
-    template<std::size_t ...Dimensions>
-    friend Tensor<Dimensions...> multiply_and_sub(const Tensor<Dimensions...>& tensorA, const Tensor<Dimensions...>& tensorB, const Tensor<Dimensions...>& tensorC);
-
+    template<std::size_t ...Dims>
+    friend Tensor<Dims...> multiply_and_sub(const Tensor<Dims...>& tensorA, const Tensor<Dims...>& tensorB, const Tensor<Dims...>& tensorC);
+    #endif
 
     // Transpose the tensor
     template <std::size_t cols, std::size_t rows, std::size_t... rest>
@@ -418,12 +434,12 @@ public:
     void apply_Softmax_derivative();
 
     // Compute the cross entropy loss function
-    template<std::size_t ...Dimensions>
-    friend float Cross_Entropy_loss(const Tensor<Dimensions...>& prediction, const Tensor<Dimensions...>& labels);
+    template<std::size_t ...Dims>
+    friend float Cross_Entropy_loss(const Tensor<Dims...>& prediction, const Tensor<Dims...>& labels);
 
 
-    /*template<PACKAGE_TYPE(*OP)(PACKAGE_TYPE, PACKAGE_TYPE), std::size_t ...Dimensions, std::size_t ...otherDimensions>
-    friend void for_each(const Tensor<Dimensions..., otherDimensions...>& a, const Tensor<Dimensions...>& b, Tensor<Dimensions..., otherDimensions...>& c);*/
+    /*template<PACKAGE_TYPE(*OP)(PACKAGE_TYPE, PACKAGE_TYPE), std::size_t ...Dims, std::size_t ...otherDimensions>
+    friend void for_each(const Tensor<Dims..., otherDimensions...>& a, const Tensor<Dims...>& b, Tensor<Dims..., otherDimensions...>& c);*/
 
 
 private:
@@ -447,3 +463,4 @@ private:
 #include "Tensor.cpp"
 #include "network_utils.cpp"
 #include "kernel_utils.cpp"
+#include "simd_utils.cpp"

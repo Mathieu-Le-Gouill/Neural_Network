@@ -1,15 +1,44 @@
-#pragma once
 #include "Tensor.h"
-#include <chrono>
-#include <random>
 #include "debug.h"
+#include <cstring>
+#include <cfloat>
 #include <optional>
 #include <sstream>
+#include <iomanip>
+#include "compiler_optimizations.h"
+#include <random>
+#include <chrono>
 
 // TODO : Look for OpenMP for threading and compare it with manual threading
 //        See for the other implementation of the argmax function
 //        See for the other implementation of the transpose function
 //        Think about how the loop could be unrolled to use all the registers available
+/*
+* Something like that
+
+        for (; b + 4 <= minibatchSize; b += 4)  // Unroll by 4 if possible
+        {
+            const PACKAGE_TYPE packedValuesB0 = _LOAD(tensor._values + (b + 0) * size + i);
+            const PACKAGE_TYPE packedValuesB1 = _LOAD(tensor._values + (b + 1) * size + i);
+            const PACKAGE_TYPE packedValuesB2 = _LOAD(tensor._values + (b + 2) * size + i);
+            const PACKAGE_TYPE packedValuesB3 = _LOAD(tensor._values + (b + 3) * size + i);
+
+            // Accumulate SIMD-packed results
+            sum = _SUB_PS(sum, packedValuesB0);
+            sum = _SUB_PS(sum, packedValuesB1);
+            sum = _SUB_PS(sum, packedValuesB2);
+            sum = _SUB_PS(sum, packedValuesB3);
+        }
+
+        // Process any remaining minibatch elements
+        for (; b < minibatchSize; ++b)
+        {
+            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            sum = _SUB_PS(sum, packedValuesB);
+        }
+
+
+*/
 
 
 // ------- TENSORS ALIAS -------
@@ -96,10 +125,11 @@ constexpr Tensor<Dimensions...>::Tensor(float value)
     // <!> TODO : Check if memset is not better
     init();
 
-    const PACKAGE_TYPE packedValue = _SET1(value);
+    const PACKAGE_FLOAT packedValue = _SET1_PS(value);
 
     size_t i = 0;
 
+    UNROLL_LOOP(6)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         _STORE(_values + i, packedValue);
@@ -141,7 +171,7 @@ Tensor<Dimensions...> zeros()
 
     output.init();
 
-    const PACKAGE_TYPE packedValues = _SETZERO();
+    const PACKAGE_FLOAT packedValues = _SETZERO();
 
     constexpr uint16_t offset = output._offset;
     constexpr uint16_t size = output._size;
@@ -186,19 +216,16 @@ Tensor<Dimensions...> normal(float mean, float std)
 
     size_t i = 0;
 
-    
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE randomValues = _mm256_set_ps(distribution(generator), distribution(generator), distribution(generator), distribution(generator),
-                                                  distribution(generator), distribution(generator), distribution(generator), distribution(generator));
+        const PACKAGE_FLOAT randomValues = _RAND(generator, distribution);
 
         _STORE(output._values + i, randomValues);
     }
 
     if constexpr (offset)
     {
-        const PACKAGE_TYPE randomValues = _mm256_set_ps(distribution(generator), distribution(generator), distribution(generator), distribution(generator),
-            											distribution(generator), distribution(generator), distribution(generator), distribution(generator));
+        const PACKAGE_FLOAT randomValues = _RAND(generator, distribution);
         
         _MASKSTORE(output._values + i, remainderMaskSI<offset>(), randomValues);
     }
@@ -256,22 +283,22 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(float value) co
 
     output.init();
 
-    const PACKAGE_TYPE packedValues = _SET1(value);
+    const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        _STORE(output._values + i, _ADD(packedValuesA, packedValues));
+        _STORE(output._values + i, _ADD_PS(packedValuesA, packedValues));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _ADD(packedValuesA, packedValues));
+        _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _ADD_PS(packedValuesA, packedValues));
 
     }
 
@@ -287,22 +314,22 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(float value) co
 
     output.init();
 
-    const PACKAGE_TYPE packedValues = _SET1(value);
+    const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        _STORE(output._values + i, _SUB(packedValuesA, packedValues));
+        _STORE(output._values + i, _SUB_PS(packedValuesA, packedValues));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _SUB(packedValuesA, packedValues));
+        _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _SUB_PS(packedValuesA, packedValues));
 
     }
 
@@ -318,20 +345,20 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(float value) co
 
     output.init();
 
-    const PACKAGE_TYPE packedValues = _SET1(value);
+    const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
         _STORE(output._values + i, _MUL(packedValuesA, packedValues));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
         _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _MUL(packedValuesA, packedValues)); // ------------------CHECK THIS------------------
 
@@ -352,20 +379,20 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(float value) co
 
     output.init();
 
-    const PACKAGE_TYPE packedValues = _SET1(value);
+    const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
         _STORE(output._values + i, _DIV(packedValuesA, packedValues));
     }
 
     if constexpr (_offset)
     {
-		const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+		const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
 		_MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _DIV(packedValuesA, packedValues));
 
@@ -379,22 +406,22 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(float value) co
 template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(float value) &&
 {
-    const PACKAGE_TYPE packedValues = _SET1(value);
+    const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        _STORE(this->_values + i, _ADD(packedValuesA, packedValues));
+        _STORE(this->_values + i, _ADD_PS(packedValuesA, packedValues));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _ADD(packedValuesA, packedValues));
+        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _ADD_PS(packedValuesA, packedValues));
 
     }
 
@@ -406,22 +433,22 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(float value) &&
 template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(float value)&&
 {
-    const PACKAGE_TYPE packedValues = _SET1(value);
+    const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        _STORE(this->_values + i, _SUB(packedValuesA, packedValues));
+        _STORE(this->_values + i, _SUB_PS(packedValuesA, packedValues));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _SUB(packedValuesA, packedValues));
+        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _SUB_PS(packedValuesA, packedValues));
 
     }
 
@@ -433,20 +460,20 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(float value)&&
 template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(float value)&&
 {
-    const PACKAGE_TYPE packedValues = _SET1(value);
+    const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
         _STORE(this->_values + i, _MUL(packedValuesA, packedValues));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
         _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _MUL(packedValuesA, packedValues));
 
@@ -460,20 +487,20 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(float value)&&
 template<::std::size_t ...Dimensions>
 constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(float value)&&
 {
-    const PACKAGE_TYPE packedValues = _SET1(value);
+    const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
         _STORE(this->_values + i, _DIV(packedValuesA, packedValues));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
         _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _DIV(packedValuesA, packedValues));
 
@@ -494,18 +521,18 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(const Tensor<Di
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(output._values + i, _ADD(packedValuesA, packedValuesB));
+        _STORE(output._values + i, _ADD_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-		const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-		const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i );
+		const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+		const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i );
 
-		_MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _ADD(packedValuesA, packedValuesB));
+		_MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _ADD_PS(packedValuesA, packedValuesB));
 
     }
 
@@ -525,18 +552,18 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(const Tensor<Di
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(output._values + i, _SUB(packedValuesA, packedValuesB));
+        _STORE(output._values + i, _SUB_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _SUB(packedValuesA, packedValuesB));
+        _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _SUB_PS(packedValuesA, packedValuesB));
 
     }
 
@@ -556,16 +583,16 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(const Tensor<Di
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(output._values + i, _MUL(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _MUL(packedValuesA, packedValuesB));
 
@@ -587,16 +614,16 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(const Tensor<Di
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(output._values + i, _DIV(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(output._values + i, remainderMaskSI<_offset>(), _DIV(packedValuesA, packedValuesB));
 
@@ -614,18 +641,18 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(const Tensor<Di
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(this->_values + i, _ADD(packedValuesA, packedValuesB));
+        _STORE(this->_values + i, _ADD_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _ADD(packedValuesA, packedValuesB));
+        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _ADD_PS(packedValuesA, packedValuesB));
 
     }
 
@@ -641,18 +668,18 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(const Tensor<Di
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(this->_values + i, _SUB(packedValuesA, packedValuesB));
+        _STORE(this->_values + i, _SUB_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _SUB(packedValuesA, packedValuesB));
+        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _SUB_PS(packedValuesA, packedValuesB));
 
     }
 
@@ -668,16 +695,16 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(const Tensor<Di
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(this->_values + i, _MUL(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _MUL(packedValuesA, packedValuesB));
 
@@ -695,16 +722,16 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(const Tensor<Di
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(this->_values + i, _DIV(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _DIV(packedValuesA, packedValuesB));
 
@@ -722,18 +749,18 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(Tensor<Dimensio
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(tensor._values + i, _ADD(packedValuesA, packedValuesB));
+        _STORE(tensor._values + i, _ADD_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _ADD(packedValuesA, packedValuesB));
+        _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _ADD_PS(packedValuesA, packedValuesB));
 
     }
 
@@ -749,18 +776,18 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(Tensor<Dimensio
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(tensor._values + i, _SUB(packedValuesA, packedValuesB));
+        _STORE(tensor._values + i, _SUB_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _SUB(packedValuesA, packedValuesB));
+        _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _SUB_PS(packedValuesA, packedValuesB));
 
     }
 
@@ -776,16 +803,16 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(Tensor<Dimensio
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(tensor._values + i, _MUL(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _MUL(packedValuesA, packedValuesB));
 
@@ -803,16 +830,16 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(Tensor<Dimensio
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(tensor._values + i, _DIV(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _DIV(packedValuesA, packedValuesB));
 
@@ -829,18 +856,18 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(Tensor<Dimensio
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(tensor._values + i, _ADD(packedValuesA, packedValuesB));
+        _STORE(tensor._values + i, _ADD_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _ADD(packedValuesA, packedValuesB));
+        _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _ADD_PS(packedValuesA, packedValuesB));
     }
 
     return tensor;
@@ -854,18 +881,18 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(Tensor<Dimensio
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(tensor._values + i, _SUB(packedValuesA, packedValuesB));
+        _STORE(tensor._values + i, _SUB_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _SUB(packedValuesA, packedValuesB));
+        _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _SUB_PS(packedValuesA, packedValuesB));
 
     }
 
@@ -880,16 +907,16 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(Tensor<Dimensio
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(tensor._values + i, _MUL(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _MUL(packedValuesA, packedValuesB));
 
@@ -906,16 +933,16 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(Tensor<Dimensio
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(tensor._values + i, _DIV(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(tensor._values + i, remainderMaskSI<_offset>(), _DIV(packedValuesA, packedValuesB));
 
@@ -932,18 +959,18 @@ constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions...>& te
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(this->_values + i, _ADD(packedValuesA, packedValuesB));
+        _STORE(this->_values + i, _ADD_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _ADD(packedValuesA, packedValuesB));
+        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _ADD_PS(packedValuesA, packedValuesB));
     }
 }
 
@@ -956,18 +983,18 @@ constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions...>& te
 
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _STORE(this->_values + i, _SUB(packedValuesA, packedValuesB));
+        _STORE(this->_values + i, _SUB_PS(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
-        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _SUB(packedValuesA, packedValuesB));
+        _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _SUB_PS(packedValuesA, packedValuesB));
     }
 }
 
@@ -980,16 +1007,16 @@ constexpr void Tensor<Dimensions...>::operator*=(const Tensor<Dimensions...>& te
     
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(this->_values + i, _MUL(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _MUL(packedValuesA, packedValuesB));
     }
@@ -1004,16 +1031,16 @@ constexpr void Tensor<Dimensions...>::operator/=(const Tensor<Dimensions...>& te
         
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _STORE(this->_values + i, _DIV(packedValuesA, packedValuesB));
     }
 
     if constexpr (_offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + i);
 
         _MASKSTORE(this->_values + i, remainderMaskSI<_offset>(), _DIV(packedValuesA, packedValuesB));
     }
@@ -1047,39 +1074,39 @@ constexpr bool Tensor<Dimensions...>::operator==(const Tensor<Dimensions...>& te
 }
 
 
-// ------ TENSORS IN BATCHES OPERATORS -------
+// ------ TENSORS BATCHES OPERATORS -------
 
 
-// Element-wise addition with a Tensor of the same dimensions
-/* template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator+(const Tensor<Dimensions..., minibatchSize>& tensor)
+// Element-wise addition with each tensors batches
+template<std::size_t... Dimensions>
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator+(const Tensor<Dimensions..., batch_size>& tensor) const
 {
-    Tensor<Dimensions..., minibatchSize> output;
+    Tensor<Dimensions..., batch_size> output;
 
     output.init();
 
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
-
     
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (size_t b = 0; b < batch_size; ++b)
     {
         size_t i = 0;
-
+        
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _STORE(output._values + b * size + i, _ADD(packedValuesA, packedValuesB));
+            _STORE(output._values + b * size + i, _ADD_PS(packedValuesA, packedValuesB));
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _MASKSTORE(output._values + b * size + i, remainderMaskSI<offset>(), _ADD(packedValuesA, packedValuesB));
+            _MASKSTORE(output._values + b * size + i, remainderMaskSI<offset>(), _ADD_PS(packedValuesA, packedValuesB));
 
         }
     }
@@ -1088,36 +1115,36 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator+(
 }
 
 
-// Element-wise subtraction with a Tensor of the same dimensions
-template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator-(const Tensor<Dimensions..., minibatchSize>& tensor)
+// Element-wise subtraction with each tensors batches
+template<std::size_t... Dimensions>
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator-(const Tensor<Dimensions..., batch_size>& tensor) const
 {
-    Tensor<Dimensions..., minibatchSize> output;
+    Tensor<Dimensions..., batch_size> output;
 
     output.init();
 
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (size_t b = 0; b < batch_size; ++b)
     {
         size_t i = 0;
 
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _STORE(output._values + b * size + i, _SUB(packedValuesA, packedValuesB));
+            _STORE(output._values + b * size + i, _SUB_PS(packedValuesA, packedValuesB));
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _MASKSTORE(output._values + b * size + i, remainderMaskSI<offset>(), _SUB(packedValuesA, packedValuesB));
+            _MASKSTORE(output._values + b * size + i, remainderMaskSI<offset>(), _SUB_PS(packedValuesA, packedValuesB));
 
         }
     }
@@ -1126,34 +1153,34 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator-(
 }
 
 
-// Element-wise multiplication with a Tensor of the same dimensions
-template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator*(const Tensor<Dimensions..., minibatchSize>& tensor)
+// Element-wise multiplication with each tensors batches
+template<std::size_t... Dimensions>
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator*(const Tensor<Dimensions..., batch_size>& tensor) const
 {
-    Tensor<Dimensions..., minibatchSize> output;
+    Tensor<Dimensions..., batch_size> output;
 
     output.init();
 
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (size_t b = 0; b < batch_size; ++b)
     {
         size_t i = 0;
 
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
             _STORE(output._values + b * size + i, _MUL(packedValuesA, packedValuesB));
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
             _MASKSTORE(output._values + b * size + i, remainderMaskSI<offset>(), _MUL(packedValuesA, packedValuesB));
 
@@ -1164,34 +1191,34 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator*(
 }
 
 
-// Element-wise division with a Tensor of the same dimensions
-template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator/(const Tensor<Dimensions..., minibatchSize>& tensor)
+// Element-wise division with each tensors batches
+template<std::size_t... Dimensions>
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator/(const Tensor<Dimensions..., batch_size>& tensor) const
 {
-    Tensor<Dimensions..., minibatchSize> output;
+    Tensor<Dimensions..., batch_size> output;
 
     output.init();
 
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (size_t b = 0; b < batch_size; ++b)
     {
         size_t i = 0;
 
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
             _STORE(output._values + b * size + i, _DIV(packedValuesA, packedValuesB));
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
             _MASKSTORE(output._values + b * size + i, remainderMaskSI<offset>(), _DIV(packedValuesA, packedValuesB));
 
@@ -1202,32 +1229,32 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator/(
 }
 
 
-// Element-wise addition with a rvalue Tensor of the same dimensions
+// Element-wise addition with each tensors batches rvalue Tensor
 template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator+(Tensor<Dimensions..., minibatchSize>&& tensor)
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator+(Tensor<Dimensions..., batch_size>&& tensor) const
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (size_t b = 0; b < batch_size; ++b)
     {
         size_t i = 0;
 
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _STORE(tensor._values + b * size + i, _ADD(packedValuesA, packedValuesB));
+            _STORE(tensor._values + b * size + i, _ADD_PS(packedValuesA, packedValuesB));
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _MASKSTORE(tensor._values + b * size + i, remainderMaskSI<offset>(), _ADD(packedValuesA, packedValuesB));
+            _MASKSTORE(tensor._values + b * size + i, remainderMaskSI<offset>(), _ADD_PS(packedValuesA, packedValuesB));
 
         }
     }
@@ -1236,32 +1263,32 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator+(
 }
 
 
-// Element-wise subtraction with a rvalue Tensor of the same dimensions
+// Element-wise subtraction with each tensors batches rvalue Tensor
 template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator-(Tensor<Dimensions..., minibatchSize>&& tensor)
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator-(Tensor<Dimensions..., batch_size>&& tensor) const
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (size_t b = 0; b < batch_size; ++b)
     {
         size_t i = 0;
 
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _STORE(tensor._values + b * size + i, _SUB(packedValuesA, packedValuesB));
+            _STORE(tensor._values + b * size + i, _SUB_PS(packedValuesA, packedValuesB));
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _MASKSTORE(tensor._values + b * size + i, remainderMaskSI<offset>(), _SUB(packedValuesA, packedValuesB));
+            _MASKSTORE(tensor._values + b * size + i, remainderMaskSI<offset>(), _SUB_PS(packedValuesA, packedValuesB));
 
         }
     }
@@ -1270,30 +1297,30 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator-(
 }
 
 
-// Element-wise multiplication with a rvalue Tensor of the same dimensions
+// Element-wise multiplication with each tensors batches rvalue Tensor
 template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator*(Tensor<Dimensions..., minibatchSize>&& tensor)
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator*(Tensor<Dimensions..., batch_size>&& tensor) const
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (size_t b = 0; b < batch_size; ++b)
     {
         size_t i = 0;
 
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
             _STORE(tensor._values + b * size + i, _MUL(packedValuesA, packedValuesB));
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
             _MASKSTORE(tensor._values + b * size + i, remainderMaskSI<offset>(), _MUL(packedValuesA, packedValuesB));
 
@@ -1304,30 +1331,30 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator*(
 }
 
 
-// Element-wise division with a rvalue Tensor of the same dimensions
+// Element-wise division with each tensors batches rvalue Tensor
 template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator/(Tensor<Dimensions..., minibatchSize>&& tensor)
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator/(Tensor<Dimensions..., batch_size>&& tensor) const
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (size_t b = 0; b < batch_size; ++b)
     {
         size_t i = 0;
-
+        
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
             _STORE(tensor._values + b * size + i, _DIV(packedValuesA, packedValuesB));
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
             _MASKSTORE(tensor._values + b * size + i, remainderMaskSI<offset>(), _DIV(packedValuesA, packedValuesB));
 
@@ -1340,25 +1367,25 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator/(
 
 // Element-wise addition of the tensor with another tensor of the same dimensions
 template<std::size_t ...Dimensions>
-constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., minibatchSize>& tensor)
+template<std::size_t batch_size>
+constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., batch_size>& tensor)
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
     size_t i = 0;
 
-    
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        PACKAGE_TYPE sum = packedValuesA;
+        PACKAGE_FLOAT sum = packedValuesA;
 
-        for (size_t b = 0; b < minibatchSize; ++b)
+        for (size_t b = 0; b < batch_size; ++b)
         {
-			const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+			const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-			sum = _ADD(sum, packedValuesB);
+			sum = _ADD_PS(sum, packedValuesB);
 		}
 
         _STORE(this->_values + i, sum);
@@ -1366,16 +1393,16 @@ constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., min
 
     if constexpr (offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        PACKAGE_TYPE sum = packedValuesA;
+        PACKAGE_FLOAT sum = packedValuesA;
 
         
-        for (size_t b = 0; b < minibatchSize; ++b)
+        for (size_t b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            sum = _ADD(sum, packedValuesB);
+            sum = _ADD_PS(sum, packedValuesB);
         }
 
         _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), sum);
@@ -1383,27 +1410,27 @@ constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., min
 }
 
 
-// Element-wise subtraction of the tensor with another tensor of the same dimensions
+// Element-wise subtraction of the tensor with each tensors batches
 template<std::size_t ...Dimensions>
-constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., minibatchSize>& tensor)
+template<std::size_t batch_size>
+constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., batch_size>& tensor)
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
     size_t i = 0;
 
-    
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        PACKAGE_TYPE sum = packedValuesA;
+        PACKAGE_FLOAT sum = packedValuesA;
 
-        for (size_t b = 0; b < minibatchSize; ++b)
+        for (size_t b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            sum = _SUB(sum, packedValuesB);
+            sum = _SUB_PS(sum, packedValuesB);
         }
 
         _STORE(this->_values + i, sum);
@@ -1411,16 +1438,16 @@ constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., min
 
     if constexpr (offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
-        PACKAGE_TYPE sum = packedValuesA;
+        PACKAGE_FLOAT sum = packedValuesA;
 
-        
-        for (size_t b = 0; b < minibatchSize; ++b)
+
+        for (size_t b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            sum = _SUB(sum, packedValuesB);
+            sum = _SUB_PS(sum, packedValuesB);
         }
 
         _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), sum);
@@ -1428,91 +1455,158 @@ constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., min
 }
 
 
-// Element-wise multiplication of the tensor with another tensor of the same dimensions
+// Sum of Element-wise multiplication of the tensor with each tensors batches
 template<std::size_t ...Dimensions>
-constexpr void Tensor<Dimensions...>::operator*=(const Tensor<Dimensions..., minibatchSize>& tensor)
+template<std::size_t batch_size>
+constexpr void Tensor<Dimensions...>::operator*=(const Tensor<Dimensions..., batch_size>& tensor)
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    size_t i = 0;
+
+    for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        size_t i = 0;
+        PACKAGE_FLOAT sum = _SETZERO();
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+
+        for (size_t b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _STORE(this->_values + i, _MUL(packedValuesA, packedValuesB));
+            const PACKAGE_FLOAT product = _MUL(packedValuesA, packedValuesB);
+
+            sum = _ADD_PS(sum, product);
         }
 
-        if constexpr (offset)
+        _STORE(this->_values + i, sum);
+    }
+
+    if constexpr (offset)
+    {
+        PACKAGE_FLOAT sum = _SETZERO();
+
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+
+        for (size_t b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), _MUL(packedValuesA, packedValuesB));
-
+            const PACKAGE_FLOAT product = _MUL(packedValuesA, packedValuesB);
+            sum = _ADD_PS(sum, product);
         }
+
+        _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), sum);
     }
 }
 
 
-// Element-wise division of the tensor with another tensor of the same dimensions
+// Sum of Element - wise division of the tensor with each tensors batches
 template<std::size_t ...Dimensions>
-constexpr void Tensor<Dimensions...>::operator/=(const Tensor<Dimensions..., minibatchSize>& tensor)
+template<std::size_t batch_size>
+constexpr void Tensor<Dimensions...>::operator/=(const Tensor<Dimensions..., batch_size>& tensor)
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    size_t i = 0;
+
+    for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        size_t i = 0;
+        PACKAGE_FLOAT sum = _SETZERO();
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+
+        for (size_t b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _STORE(this->_values + i, _DIV(packedValuesA, packedValuesB));
+            const PACKAGE_FLOAT product = _DIV(packedValuesA, packedValuesB);
+
+            sum = _ADD_PS(sum, product);
         }
 
-        if constexpr (offset)
-        {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
-
-            _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), _DIV(packedValuesA, packedValuesB));
-
-        }
+        _STORE(this->_values + i, sum);
     }
-}*/
+
+    if constexpr (offset)
+    {
+        PACKAGE_FLOAT sum = _SETZERO();
+
+        const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
+
+        for (size_t b = 0; b < batch_size; ++b)
+        {
+            const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
+
+            const PACKAGE_FLOAT product = _DIV(packedValuesA, packedValuesB);
+            sum = _ADD_PS(sum, product);
+        }
+
+        _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), sum);
+    }
+}
 
 
 // ------ TENSORS BASIC FUNCTIONS -------
 
 
 // To print the tensor elements
-template<std::size_t ...Dimensions>
+template <std::size_t... Dimensions>
 void print(const Tensor<Dimensions...>& tensor, float decimals)
 {
-    assert(tensor._values != nullptr && "Error the given tensor is empty.");
+    assert(tensor._values != nullptr && "Error: the given tensor is empty.");
 
-    const float coef = pow(10.f, decimals);
+    std::cout << std::fixed << std::setprecision(static_cast<int>(decimals));
 
     constexpr std::size_t dimensions[] = { Dimensions... };
+    const size_t size = tensor._size;
 
-    
-    for (std::size_t d = 0; d < tensor._size; ++d) 
-    {
-        std::cout << roundf(tensor._values[d] * coef) / coef << " ";
-
-        if ((d + 1) % dimensions[0] == 0) 
-            std::cout << std::endl;
+    if constexpr (sizeof...(Dimensions) == 1) {
+        // For 1D tensor (vector)
+        for (std::size_t d = 0; d < size; ++d) {
+            std::cout << tensor._values[d] << " ";
+        }
     }
+    else if constexpr (sizeof...(Dimensions) == 2) {
+        // For 2D tensor (matrix)
+        const size_t rows = dimensions[1];
+        const size_t cols = dimensions[0];
+        for (std::size_t r = 0; r < rows; ++r) {
+            for (std::size_t c = 0; c < cols; ++c) {
+                std::cout << tensor._values[r * cols + c] << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+    else {
+        // For Higher-dimensional tensor
+        const size_t rows = dimensions[1];
+        const size_t cols = dimensions[0];
+        for (std::size_t d = 0; d < size; ++d) {
+            std::cout << tensor._values[d] << " ";
+
+            if ((d + 1) % cols == 0) {
+                std::cout << std::endl;
+            }
+
+            if ((d + 1) % (cols * rows) == 0 && d != size - 1) {
+                std::cout << std::endl;
+            }
+        }
+    }
+
+    std::cout << std::defaultfloat;
+}
+
+
+// To show the shape of the tensor
+template<std::size_t ...Dimensions>
+void show_shape(const Tensor<Dimensions...>& tensor)
+{
+    ((std::cout << Dimensions << ' '), ...);
+    std::cout << '\n';
 }
 
 
@@ -1524,25 +1618,24 @@ Tensor<Dimensions...> abs(const Tensor<Dimensions...>& tensor)
 
     output.init();
 
-    constexpr uint16_t offset = tensor._offset;
-    constexpr uint16_t size = tensor._size;
+    constexpr uint16_t offset = Tensor<Dimensions...>::_offset;
+    constexpr uint16_t size = Tensor<Dimensions...>::_size;
 
     auto minus1 = _SET1_EPI32(-1);
-    const PACKAGE_TYPE absMask = _CASTSI_PS(_mm256_srli_epi32(minus1, 1));
+    const PACKAGE_FLOAT absMask = _CASTSI_PS(_SRLI_EPI32(minus1, 1));
 
     size_t i = 0;
-
     
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValues = _LOAD(tensor._values + i);
 
         _STORE(output._values + i, _AND(absMask, packedValues));// Clear the sign bit
     }
 
     if constexpr (offset)
     {
-        const PACKAGE_TYPE packedValues = _LOAD(tensor._values + i);
+        const PACKAGE_FLOAT packedValues = _LOAD(tensor._values + i);
 
 		_MASKSTORE(output._values + i, remainderMaskSI<offset>(), _AND(absMask, packedValues));
     }
@@ -1550,21 +1643,6 @@ Tensor<Dimensions...> abs(const Tensor<Dimensions...>& tensor)
     return output;
 }
 
-
-// To get the shape of the tensor
-template<std::size_t ...Dimensions>
-constexpr std::string Tensor<Dimensions...>::shape() const
-{
-    std::stringstream ss;
-
-    ss << "(";
-    ((ss << Dimensions << ", "), ...);
-    std::string result = ss.str();
-    result.pop_back();
-    result.back() = ')';
-
-    return result;
-}
 
 // Reshape the dimensions of the tensor to a compatible one
 template<std::size_t ...Dimensions>
@@ -1637,37 +1715,32 @@ constexpr Tensor<(1 * ... * Dimensions)> Tensor<Dimensions...>::flatten() &&
 template<std::size_t ...Dimensions>
 constexpr float Tensor<Dimensions...>::sum() const
 {
-    PACKAGE_TYPE packedSum;
+    PACKAGE_FLOAT packedSum = _LOAD(_values);
 
     if constexpr (_size >= PACKAGE_LENGTH)
     {
-        packedSum = _LOAD(_values);
-
         size_t i = PACKAGE_LENGTH;
 
-        
         for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValues = _LOAD(_values + i);
+            const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
 
-            packedSum = _ADD(packedValues, packedSum);
+            packedSum = _ADD_PS(packedValues, packedSum);
         }
 
         if constexpr (_offset)
         {
-            const PACKAGE_TYPE packedValues = _LOAD(_values + i);
+            const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
 
-            packedSum = _ADD( _AND(packedValues, remainderMask<_offset>()), packedSum);
+            packedSum = _ADD_PS( _AND(packedValues, remainderMask<_offset>()), packedSum);
         }
     }
     else
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values);
-
-        packedSum = _AND(packedValues, remainderMask<_size>());
+        packedSum = _AND(packedSum, remainderMask<_size>());
     }
        
-    const float sum = horizontal_sum8(packedSum);
+    const float sum = _HSUM(packedSum);
 
     return sum;
 }
@@ -1678,32 +1751,31 @@ constexpr float Tensor<Dimensions...>::sum() const
 template<std::size_t ...Dimensions>
 constexpr size_t Tensor<Dimensions...>::argmax() const
 {
-    PACKAGE_TYPE maxValues;
-
     size_t argmax = 0;
-    float max;
+    float max = 0;
 
     if constexpr (_size >= PACKAGE_LENGTH)
     {
-        max = horizontal_max8(_LOAD(_values));
-        maxValues = _SET1(max);
+        max = _HMAX(_LOAD(_values));
+        
+        PACKAGE_FLOAT maxValues = _SET1_PS(max);
 
         size_t i = PACKAGE_LENGTH;
 
         for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValues = _LOAD(_values + i);
+            const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
 
-            maxValues = _MAX(packedValues, maxValues);
+            maxValues = _MAX_PS(packedValues, maxValues);
 
-            auto compMask = _CMPGT_EPI32( _CASTPS_SI(maxValues), _CASTPS_SI(packedValues));
+            auto compMask = _CMPGT_EPI32(_CASTPS_SI(maxValues), _CASTPS_SI(packedValues));
 
-            if (!_mm256_testz_si256(compMask, compMask)) [[unlikely]]
+            if (!_TESTZSI(compMask, compMask)) [[unlikely]]
             {
-                max = horizontal_max8(maxValues);
+                max = _HMAX(maxValues);
                 argmax = i;
 
-                maxValues = _SET1(max);
+                maxValues = _SET1_PS(max);
             }
 				
         }
@@ -1759,43 +1831,39 @@ constexpr size_t Tensor<Dimensions...>::argmax() const
 template<std::size_t ...Dimensions>
 constexpr float Tensor<Dimensions...>::max() const
 {
-    PACKAGE_TYPE maxValues;
+    PACKAGE_FLOAT maxValues = _LOAD(_values);
 
     if constexpr (_size >= PACKAGE_LENGTH)
     {
-        maxValues = _LOAD(_values);
-
         size_t i = PACKAGE_LENGTH;
 
         for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValues = _LOAD(_values + i);
+            const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
 
-            maxValues = _MAX(packedValues, maxValues);
+            maxValues = _MAX_PS(packedValues, maxValues);
         }
 
         if constexpr (_offset)
         {
-            PACKAGE_TYPE minimum = _SET1(-FLT_MAX);
+            PACKAGE_FLOAT minimum = _SET1_PS(-FLT_MAX);
             constexpr int mask = (1 << _offset) - 1;
 
-            const PACKAGE_TYPE packedValues = _LOAD(_values + i);
+            const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
 
-            maxValues = _MAX(_BLEND(minimum, packedValues, mask), maxValues);
+            maxValues = _MAX_PS(_BLEND(minimum, packedValues, mask), maxValues);
         }
     }
     else
     {
-        PACKAGE_TYPE minimum = _SET1(-FLT_MAX);
+        PACKAGE_FLOAT minimum = _SET1_PS(-FLT_MAX);
         constexpr int mask = (1 << _size) - 1;
 
-        const PACKAGE_TYPE packedValues = _LOAD(_values);
-
-        maxValues = _BLEND(minimum, packedValues, mask);
+        maxValues = _BLEND(minimum, maxValues, mask);
     }
        
 
-    float max = horizontal_max8(maxValues);
+    float max = _HMAX(maxValues);
 
     return max;
 }
@@ -1815,43 +1883,37 @@ constexpr float Tensor<Dimensions...>::mean() const
 template<std::size_t ...Dimensions>
 constexpr float Tensor<Dimensions...>::variance(float mean) const
 {
-    PACKAGE_TYPE packedMean = _SET1(mean);
-
-    PACKAGE_TYPE deviation;
+    const PACKAGE_FLOAT packedMean = _SET1_PS(mean);
+    
+    PACKAGE_FLOAT deviation = _SUB_PS(_LOAD(_values), packedMean);
 
     if constexpr (_size >= PACKAGE_LENGTH)
     {
-        deviation = _SUB( _LOAD(_values), packedMean);
-
         size_t i = PACKAGE_LENGTH;
-
-
         
         for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packedValues = _LOAD(_values + i);
+            const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
 
-            deviation = _ADD( _SUB(packedValues, packedMean), deviation);
+            deviation = _ADD_PS( _SUB_PS(packedValues, packedMean), deviation);
         }
 
         if constexpr (_offset)
         {
-            const PACKAGE_TYPE packedValues = _SUB( _LOAD(_values + i), packedMean);
+            const PACKAGE_FLOAT packedValues = _SUB_PS( _LOAD(_values + i), packedMean);
 
-            const PACKAGE_TYPE maskedValues = _AND(packedValues, remainderMask<_offset>());
+            const PACKAGE_FLOAT maskedValues = _AND(packedValues, remainderMask<_offset>());
 
-            deviation = _ADD( maskedValues, deviation);
+            deviation = _ADD_PS( maskedValues, deviation);
         }
     }
     else
     {
-        const PACKAGE_TYPE packedValues = _LOAD(_values);
-
-        deviation = _AND( _SUB(packedValues, packedMean), remainderMask<_size>());
+        deviation = _AND( deviation, remainderMask<_size>());
     }
         
 
-    const float variance = horizontal_sum8( _MUL(deviation, deviation)) / (float) _size;
+    const float variance = _HSUM( _MUL(deviation, deviation)) / (float) _size;
 
     return variance;
 }
@@ -1859,7 +1921,7 @@ constexpr float Tensor<Dimensions...>::variance(float mean) const
 
 // ------ TENSORS MATRIX OPERATIONS -------
 
-
+#ifdef __FMA__
 // Element-wise addition between tensorC and the element-wise multiplication of tensorA and tensorB
 // @return tensorA * tensorB + tensorC
 template<std::size_t ...Dimensions>
@@ -1876,22 +1938,22 @@ Tensor<Dimensions...> multiply_and_add(const Tensor<Dimensions...>& tensorA, con
     
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(tensorA._values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensorB._values + i);
-        const PACKAGE_TYPE packedValuesC = _LOAD(tensorC._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(tensorA._values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensorB._values + i);
+        const PACKAGE_FLOAT packedValuesC = _LOAD(tensorC._values + i);
 
-        const PACKAGE_TYPE result = _FMADD(packedValuesA, packedValuesB, packedValuesC);
+        const PACKAGE_FLOAT result = _FMADD(packedValuesA, packedValuesB, packedValuesC);
 
         _STORE(output._values + i, result);
     }
 
     if constexpr (offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(tensorA._values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensorB._values + i);
-        const PACKAGE_TYPE packedValuesC = _LOAD(tensorC._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(tensorA._values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensorB._values + i);
+        const PACKAGE_FLOAT packedValuesC = _LOAD(tensorC._values + i);
 
-        const PACKAGE_TYPE result = _FMADD(packedValuesA, packedValuesB, packedValuesC);
+        const PACKAGE_FLOAT result = _FMADD(packedValuesA, packedValuesB, packedValuesC);
 
         _MASKSTORE(output._values + i, remainderMaskSI<offset>(), result);
     }
@@ -1916,22 +1978,22 @@ Tensor<Dimensions...> multiply_and_sub(const Tensor<Dimensions...>& tensorA, con
     
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(tensorA._values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensorB._values + i);
-        const PACKAGE_TYPE packedValuesC = _LOAD(tensorC._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(tensorA._values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensorB._values + i);
+        const PACKAGE_FLOAT packedValuesC = _LOAD(tensorC._values + i);
 
-        const PACKAGE_TYPE result = _FMSUB(packedValuesA, packedValuesB, packedValuesC);
+        const PACKAGE_FLOAT result = _FMSUB(packedValuesA, packedValuesB, packedValuesC);
 
         _STORE(output._values + i, result);
     }
 
     if constexpr (offset)
     {
-        const PACKAGE_TYPE packedValuesA = _LOAD(tensorA._values + i);
-        const PACKAGE_TYPE packedValuesB = _LOAD(tensorB._values + i);
-        const PACKAGE_TYPE packedValuesC = _LOAD(tensorC._values + i);
+        const PACKAGE_FLOAT packedValuesA = _LOAD(tensorA._values + i);
+        const PACKAGE_FLOAT packedValuesB = _LOAD(tensorB._values + i);
+        const PACKAGE_FLOAT packedValuesC = _LOAD(tensorC._values + i);
 
-        const PACKAGE_TYPE result = _FMSUB(packedValuesA, packedValuesB, packedValuesC);
+        const PACKAGE_FLOAT result = _FMSUB(packedValuesA, packedValuesB, packedValuesC);
 
         _MASKSTORE(output._values + i, remainderMaskSI<offset>(), result);
     }
@@ -1939,31 +2001,21 @@ Tensor<Dimensions...> multiply_and_sub(const Tensor<Dimensions...>& tensorA, con
     return output;
 }
 
+#endif
+
 
 // Transpose the tensor
 template <std::size_t cols, std::size_t rows, std::size_t... rest>
 Tensor<rows, cols, rest...> transpose(const Tensor<cols, rows, rest...>& tensor)
 {
-    Tensor<cols, rows, rest...> output;
-    output.init();
-    
-    for (std::size_t r = 0; r < rows; ++r)
-    {
-        for (std::size_t c = 0; c < cols; ++c)
-        {
-            output._values[r * cols + c] = tensor._values[c * rows + r];
-        }
-    }
-
-
-    /*Tensor<cols, rows, rest...> output;
+    Tensor<rows, cols, rest...> output;
     output.init();
 
-    constexpr std::size_t colsA = rows;
-    constexpr std::size_t rowsA = cols;
+    constexpr std::size_t colsA = cols;
+    constexpr std::size_t rowsA = rows;
 
-    constexpr std::size_t colsB = cols;
-    constexpr std::size_t rowsB = rows;
+    constexpr std::size_t colsB = rows;
+    constexpr std::size_t rowsB = cols;
 
     constexpr std::uint16_t offColsA = colsA % PACKAGE_LENGTH;
     constexpr std::uint16_t offRowsA = rowsA % PACKAGE_LENGTH;
@@ -1980,45 +2032,36 @@ Tensor<rows, cols, rest...> transpose(const Tensor<cols, rows, rest...>& tensor)
 
         for (; c + PACKAGE_LENGTH <= colsA; c += PACKAGE_LENGTH)
         {
-            PACKAGE_TYPE row[PACKAGE_LENGTH];
+            PACKAGE_FLOAT rowArray[PACKAGE_LENGTH];
 
             for (std::uint16_t i = 0; i < PACKAGE_LENGTH; ++i)
             {
-				row[i] = _LOAD(tensor._values + (r + i) * colsA + c);
+				rowArray[i] = _LOAD(tensor._values + (r + i) * colsA + c);
+
             }
 
-            #ifdef PACKAGE_M256
-            transpose8(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]);
-
-            #elif defined PACKAGE_M128
-            _MM_TRANSPOSE4_PS(row[0], row[1], row[2], row[3]);
-            #endif
+            _TRANSPOSE(rowArray);
 
             for(std::uint16_t i = 0; i < PACKAGE_LENGTH; ++i)
 			{
-                _STORE(output._values + (c + i) * colsB + r, row[i]);
+                _STORE(output._values + (c + i) * colsB + r, rowArray[i]);
 			}
         }
 
         if constexpr (offColsA)
         {
-            PACKAGE_TYPE row[PACKAGE_LENGTH];
+            PACKAGE_FLOAT rowArray[PACKAGE_LENGTH];
 
             for (std::uint16_t i = 0; i < PACKAGE_LENGTH; ++i)
             {
-                row[i] = _LOAD(tensor._values + (r + i) * colsA + c);
+                rowArray[i] = _LOAD(tensor._values + (r + i) * colsA + c);
             }
 
-            #ifdef PACKAGE_M256
-            transpose8(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]);
-
-            #elif defined PACKAGE_M128
-            _MM_TRANSPOSE4_PS(row[0], row[1], row[2], row[3]);
-            #endif
+            _TRANSPOSE(rowArray);
 
             for (std::uint16_t i = 0; i < offColsA; ++i)
             {
-                _STORE(output._values + (c + i) * colsB + r, row[i]);
+                _STORE(output._values + (c + i) * colsB + r, rowArray[i]);
             }
         }
     }
@@ -2030,49 +2073,39 @@ Tensor<rows, cols, rest...> transpose(const Tensor<cols, rows, rest...>& tensor)
         
         for (; c + PACKAGE_LENGTH <= colsA; c += PACKAGE_LENGTH)
         {
-            PACKAGE_TYPE row[PACKAGE_LENGTH];
+            PACKAGE_FLOAT rowArray[PACKAGE_LENGTH];
 
             for (std::uint16_t i = 0; i < offRowsA; ++i)
             {
-                row[i] = _LOAD(tensor._values + (r + i) * colsA + c);
+                rowArray[i] = _LOAD(tensor._values + (r + i) * colsA + c);
             }
 
 
-            #ifdef PACKAGE_M256
-            transpose8(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]);
-
-            #elif defined PACKAGE_M128
-            _MM_TRANSPOSE4_PS(row[0], row[1], row[2], row[3]);
-            #endif
+            _TRANSPOSE(rowArray);
 
             for (std::uint16_t i = 0; i < PACKAGE_LENGTH; ++i)
             {
-                _MASKSTORE(output._values + (c + i) * colsB + r, remainderMaskSI<offRowsA>(), row[i]);
+                _MASKSTORE(output._values + (c + i) * colsB + r, remainderMaskSI<offRowsA>(), rowArray[i]);
             }
         }
 
         if constexpr (offColsA)
         {
-            PACKAGE_TYPE row[PACKAGE_LENGTH];
+            PACKAGE_FLOAT rowArray[PACKAGE_LENGTH];
 
             for (std::uint16_t i = 0; i < offRowsA; ++i)
             {
-                row[i] = _LOAD(tensor._values + (r + i) * colsA + c);
+                rowArray[i] = _LOAD(tensor._values + (r + i) * colsA + c);
             }
 
-            #ifdef PACKAGE_M256
-            transpose8(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]);
-
-            #elif defined PACKAGE_M128
-            _MM_TRANSPOSE4_PS(row[0], row[1], row[2], row[3]);
-            #endif
+            _TRANSPOSE(rowArray);
 
             for (std::uint16_t i = 0; i < offColsA; ++i)
             {
-                _MASKSTORE(output._values + (c + i) * colsB + r, remainderMaskSI<offRowsA>(), row[i]);
+                _MASKSTORE(output._values + (c + i) * colsB + r, remainderMaskSI<offRowsA>(), rowArray[i]);
             }
         }
-    }*/
+    }
    
     return output;
 }
@@ -2110,14 +2143,18 @@ Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, 
             {
                 iterB = tensorB._values + c + l * colsB * colsA;
 
-                PACKAGE_TYPE sum = _MUL(_LOAD1(iterA), _LOAD(iterB));
+                PACKAGE_FLOAT sum = _MUL(_LOAD1(iterA), _LOAD(iterB));
 
                 for (std::size_t i = 1; i < colsA; ++i)
                 {
-                    const PACKAGE_TYPE packageA = _LOAD1(iterA + i);
-                    const PACKAGE_TYPE packageB = _LOAD(iterB + i * colsB);
-
-                    sum = _FMADD(packageA, packageB, sum);
+                    const PACKAGE_FLOAT packageA = _LOAD1(iterA + i);
+                    const PACKAGE_FLOAT packageB = _LOAD(iterB + i * colsB);
+                    
+                    #ifdef __FMA__
+                        sum = _FMADD(packageA, packageB, sum);
+                    #else
+                        sum = _ADD_PS(_MUL(packageA, packageB), sum);
+                    #endif
                 }
 
                 _STORE(iterO + c, sum);
@@ -2127,14 +2164,18 @@ Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, 
             {
                 iterB = tensorB._values + c + l * colsB * colsA;
 
-                PACKAGE_TYPE sum = _MUL(_LOAD1(iterA), _LOAD(iterB));
+                PACKAGE_FLOAT sum = _MUL(_LOAD1(iterA), _LOAD(iterB));
 
                 for (std::size_t i = 1; i < colsA; ++i)
                 {
-                    const PACKAGE_TYPE packageA = _LOAD1(iterA + i);
-                    const PACKAGE_TYPE packageB = _LOAD(iterB + i * colsB);
+                    const PACKAGE_FLOAT packageA = _LOAD1(iterA + i);
+                    const PACKAGE_FLOAT packageB = _LOAD(iterB + i * colsB);
 
-                    sum = _FMADD(packageA, packageB, sum);
+                    #ifdef __FMA__
+                        sum = _FMADD(packageA, packageB, sum);
+                    #else
+                        sum = _ADD_PS(_MUL(packageA, packageB), sum);
+                    #endif
                 }
 
                 _MASKSTORE(iterO + c, mask, sum);
@@ -2177,7 +2218,7 @@ Tensor<colsB, rowsA, rest...> mul_transposed(const Tensor<colsA, rowsA, rest...>
                 iterA = tensorA._values + colsA * r + colsA * rowsA * l;
                 iterB = tensorB._values + colsA * c + colsA * colsB * l;
 
-                PACKAGE_TYPE sum;
+                PACKAGE_FLOAT sum;
 
                 if constexpr (colsA >= PACKAGE_LENGTH)
                 {
@@ -2187,29 +2228,37 @@ Tensor<colsB, rowsA, rest...> mul_transposed(const Tensor<colsA, rowsA, rest...>
 
                     for (; i + PACKAGE_LENGTH <= colsA; i += PACKAGE_LENGTH)
                     {
-                        const PACKAGE_TYPE packageA = _LOAD(iterA + i);
-                        const PACKAGE_TYPE packageB = _LOAD(iterB + i);
+                        const PACKAGE_FLOAT packageA = _LOAD(iterA + i);
+                        const PACKAGE_FLOAT packageB = _LOAD(iterB + i);
 
-                        sum = _FMADD(packageA, packageB, sum);
+                        #ifdef __FMA__
+                            sum = _FMADD(packageA, packageB, sum);
+                        #else
+                            sum = _ADD_PS(_MUL(packageA, packageB), sum);
+                        #endif
                     }
 
                     if constexpr (offcols)
                     {
-                        const PACKAGE_TYPE packageA = _MASKLOAD(iterA + i, mask);
-                        const PACKAGE_TYPE packageB = _MASKLOAD(iterB + i, mask);
+                        const PACKAGE_FLOAT packageA = _MASKLOAD(iterA + i, mask);
+                        const PACKAGE_FLOAT packageB = _MASKLOAD(iterB + i, mask);
 
-                        sum = _FMADD(packageA, packageB, sum);
+                        #ifdef __FMA__
+                            sum = _FMADD(packageA, packageB, sum);
+                        #else
+                            sum = _ADD_PS(_MUL(packageA, packageB), sum);
+                        #endif
                     }
                 }
                 else
                 {
-                    const PACKAGE_TYPE packageA = _LOAD(iterA);
-                    const PACKAGE_TYPE packageB = _LOAD(iterB);
+                    const PACKAGE_FLOAT packageA = _LOAD(iterA);
+                    const PACKAGE_FLOAT packageB = _LOAD(iterB);
 
                     sum = _AND(_MUL(packageA, packageB), remainderMask<colsA>());
                 }
 
-                *iterO = horizontal_sum8(sum);
+                *iterO = _HSUM(sum);
 
                 ++iterO;
             }
@@ -2242,7 +2291,7 @@ Tensor<rowsA> mul_b_transposed_scalar(const Tensor<colsA, rowsA>& tensorA, const
     {
         iterA = tensorA._values + r * colsA;
 
-        PACKAGE_TYPE sum;
+        PACKAGE_FLOAT sum;
 
         if constexpr (colsA >= PACKAGE_LENGTH)
         {
@@ -2252,29 +2301,37 @@ Tensor<rowsA> mul_b_transposed_scalar(const Tensor<colsA, rowsA>& tensorA, const
 
             for (; i + PACKAGE_LENGTH <= colsA; i += PACKAGE_LENGTH)
             {
-                const PACKAGE_TYPE packageA = _LOAD(iterA + i);
-                const PACKAGE_TYPE packageB = _LOAD(iterB + i);
+                const PACKAGE_FLOAT packageA = _LOAD(iterA + i);
+                const PACKAGE_FLOAT packageB = _LOAD(iterB + i);
 
-                sum = _FMADD(packageA, packageB, sum);
+                #ifdef __FMA__
+                    sum = _FMADD(packageA, packageB, sum);
+                #else
+                    sum = _ADD_PS(_MUL(packageA, packageB), sum);
+                #endif
             }
 
             if constexpr (offCols)
             {
-                const PACKAGE_TYPE packageA = _MASKLOAD(iterA + i, mask);
-                const PACKAGE_TYPE packageB = _MASKLOAD(iterB + i, mask);
+                const PACKAGE_FLOAT packageA = _MASKLOAD(iterA + i, mask);
+                const PACKAGE_FLOAT packageB = _MASKLOAD(iterB + i, mask);
 
-                sum = _FMADD(packageA, packageB, sum);
+                #ifdef __FMA__
+                    sum = _FMADD(packageA, packageB, sum);
+                #else
+                    sum = _ADD_PS(_MUL(packageA, packageB), sum);
+                #endif
             }
         }
         else
         {
-            const PACKAGE_TYPE packageA = _LOAD(iterA);
-            const PACKAGE_TYPE packageB = _LOAD(iterB);
+            const PACKAGE_FLOAT packageA = _LOAD(iterA);
+            const PACKAGE_FLOAT packageB = _LOAD(iterB);
 
             sum = _AND( _MUL(packageA, packageB), remainderMask<colsA>());
         }
 
-        *iterO = horizontal_sum8(sum);
+        *iterO = _HSUM(sum);
 
         ++iterO;
     }
@@ -2298,24 +2355,24 @@ Tensor<colsB, colsA> mul_transposed_scalar(const Tensor<colsA>& tensorA, const T
     
     for (std::size_t c = 0; c < colsA; ++c)
     {
-        PACKAGE_TYPE packageA = _LOAD1(tensorA._values + c);
+        PACKAGE_FLOAT packageA = _LOAD1(tensorA._values + c);
 
         std::size_t i = 0;
 
         for (; i + PACKAGE_LENGTH <= colsB; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packageB = _LOAD(tensorB._values + i);
+            const PACKAGE_FLOAT packageB = _LOAD(tensorB._values + i);
 
-            const PACKAGE_TYPE result = _MUL(packageA, packageB);
+            const PACKAGE_FLOAT result = _MUL(packageA, packageB);
 
             _STORE(output._values + i + c * colsB, result);
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packageB = _LOAD(tensorB._values + i);
+            const PACKAGE_FLOAT packageB = _LOAD(tensorB._values + i);
 
-            const PACKAGE_TYPE result = _MUL(packageA, packageB);
+            const PACKAGE_FLOAT result = _MUL(packageA, packageB);
 
             _MASKSTORE(output._values + i + c * colsB, mask, result);
         }
@@ -2324,75 +2381,38 @@ Tensor<colsB, colsA> mul_transposed_scalar(const Tensor<colsA>& tensorA, const T
     
     for (std::size_t c = 0; c < colsA; ++c)
     {
-        PACKAGE_TYPE packageA = _LOAD1(tensorA._values + c);
+        PACKAGE_FLOAT packageA = _LOAD1(tensorA._values + c);
 
         std::size_t i = 0;
 
         for (; i + PACKAGE_LENGTH <= colsB; i += PACKAGE_LENGTH)
         {
-            const PACKAGE_TYPE packageB = _LOAD(tensorB._values + i);
-            const PACKAGE_TYPE packageC = _LOAD(output._values + i + c * colsB);
+            const PACKAGE_FLOAT packageB = _LOAD(tensorB._values + i);
+            const PACKAGE_FLOAT packageC = _LOAD(output._values + i + c * colsB);
 
-            const PACKAGE_TYPE result = _FMADD(packageA, packageB, packageC);
+            #ifdef __FMA__
+                const PACKAGE_FLOAT result = _FMADD(packageA, packageB, packageC);
+            #else
+                const PACKAGE_FLOAT result = _ADD_PS(_MUL(packageA, packageB), packageC);
+            #endif
 
             _STORE(output._values + i + c * colsB, result);
         }
 
         if constexpr (offset)
         {
-            const PACKAGE_TYPE packageB = _LOAD(tensorB._values + i);
-            const PACKAGE_TYPE packageC = _LOAD(output._values + i + c * colsB);
+            const PACKAGE_FLOAT packageB = _LOAD(tensorB._values + i);
+            const PACKAGE_FLOAT packageC = _LOAD(output._values + i + c * colsB);
 
-            const PACKAGE_TYPE result = _FMADD(packageA, packageB, packageC);
+            #ifdef __FMA__
+                const PACKAGE_FLOAT result = _FMADD(packageA, packageB, packageC);
+            #else
+                const PACKAGE_FLOAT result = _ADD_PS(_MUL(packageA, packageB), packageC);
+            #endif
 
             _MASKSTORE(output._values + i + c * colsB, mask, result);
         }
     }
 
     return output;
-}
-
-
-// ------ TENSORS MASK -------
-
-
-#ifdef __AVX2__
-
-// Return a mask based on a given offset
-// Only the offset values in the returned mask are set to 1, the others are set to 0
-template<uint16_t offset>
-inline static constexpr __m256i remainderMaskSI()
-{
-    static_assert(offset <= PACKAGE_LENGTH, "Error in remainderMask : offset is too big");
-    // Make a mask of 8 bytes
-    // No need to clip for missingLanes <= 8 because the shift is already good, results in zero
-    uint64_t mask = ~(uint64_t) 0;
-    mask >>= (PACKAGE_LENGTH - offset) * 8;
-    // Sign extend these bytes into int32 lanes in AVX vector
-    __m128i tmp = _mm_cvtsi64_si128((int64_t)mask);
-    return _mm256_cvtepi8_epi32(tmp);
-}
-
-#else
-
-// Aligned by 64 bytes
-// The load will only touch a single cache line, no penalty for unaligned load
-static const int alignas(64) s_remainderLoadMask[16] = {
-    -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0 };
-template<uint16_t offset>
-inline __m256i remainderMask()
-{
-    static_assert(offset <= PACKAGE_LENGTH, "Error in remainderMask : offset is too big");
-
-    // Unaligned load from a constant array
-    const int* rsi = &s_remainderLoadMask[offset];
-    return _mm256_loadu_si256((const __m256i*)rsi);
-}
-
-#endif
-
-template<uint16_t offset>
-inline static constexpr PACKAGE_TYPE remainderMask()
-{
-    return _CASTSI_PS(remainderMaskSI<offset>());
 }

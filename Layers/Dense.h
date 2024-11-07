@@ -33,7 +33,8 @@ public:
         _biases_gradient  += upstream_loss_gradient;
 
         // Compute loss gradient with respect to the input (previous layer)
-        InputType loss_gradient = mul(upstream_loss_gradient.reshape<num_output_neurons, 1>(), _weights);
+        InputType loss_gradient = mul(upstream_loss_gradient.template reshape<num_output_neurons, 1>(), _weights);
+
 
         return loss_gradient;
     }

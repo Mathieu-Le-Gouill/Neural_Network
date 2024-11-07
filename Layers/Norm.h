@@ -26,7 +26,7 @@ class Norm : public Layer< Norm<inputDims...>, Tensor<inputDims..., minibatchSiz
 			_shiftGradient += input.sum();
 			_scaleGradient += _shiftGradient * _scale;
 
-			input *= _scale / std::sqrtf(_variance);
+			input *= _scale / sqrtf(_variance);
 
 			return std::move(input);
 		}
