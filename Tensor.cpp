@@ -5,11 +5,38 @@
 #include "debug.h"
 #include <optional>
 #include <sstream>
+#include "compiler_optimizations.h"
 
 // TODO : Look for OpenMP for threading and compare it with manual threading
 //        See for the other implementation of the argmax function
 //        See for the other implementation of the transpose function
 //        Think about how the loop could be unrolled to use all the registers available
+/*
+* Something like that
+
+        for (; b + 4 <= minibatchSize; b += 4)  // Unroll by 4 if possible
+        {
+            const PACKAGE_TYPE packedValuesB0 = _LOAD(tensor._values + (b + 0) * size + i);
+            const PACKAGE_TYPE packedValuesB1 = _LOAD(tensor._values + (b + 1) * size + i);
+            const PACKAGE_TYPE packedValuesB2 = _LOAD(tensor._values + (b + 2) * size + i);
+            const PACKAGE_TYPE packedValuesB3 = _LOAD(tensor._values + (b + 3) * size + i);
+
+            // Accumulate SIMD-packed results
+            sum = _SUB(sum, packedValuesB0);
+            sum = _SUB(sum, packedValuesB1);
+            sum = _SUB(sum, packedValuesB2);
+            sum = _SUB(sum, packedValuesB3);
+        }
+
+        // Process any remaining minibatch elements
+        for (; b < minibatchSize; ++b)
+        {
+            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+            sum = _SUB(sum, packedValuesB);
+        }
+
+
+*/
 
 
 // ------- TENSORS ALIAS -------
@@ -100,6 +127,7 @@ constexpr Tensor<Dimensions...>::Tensor(float value)
 
     size_t i = 0;
 
+    UNROLL_LOOP(UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         _STORE(_values + i, packedValue);
@@ -1047,26 +1075,26 @@ constexpr bool Tensor<Dimensions...>::operator==(const Tensor<Dimensions...>& te
 }
 
 
-// ------ TENSORS IN BATCHES OPERATORS -------
+// ------ TENSORS BATCHES OPERATORS -------
 
 
-// Element-wise addition with a Tensor of the same dimensions
-/* template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator+(const Tensor<Dimensions..., minibatchSize>& tensor)
+// Element-wise addition with each tensors batches
+template<std::size_t... Dimensions>
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator+(const Tensor<Dimensions..., batch_size>& tensor) const
 {
-    Tensor<Dimensions..., minibatchSize> output;
+    Tensor<Dimensions..., batch_size> output;
 
     output.init();
 
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
+    size_t b, i;
     
-    for (size_t b = 0; b < minibatchSize; ++b)
+    for (b = 0; b < batch_size; ++b)
     {
-        size_t i = 0;
-
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+        for (i = 0; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1088,23 +1116,23 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator+(
 }
 
 
-// Element-wise subtraction with a Tensor of the same dimensions
-template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator-(const Tensor<Dimensions..., minibatchSize>& tensor)
+// Element-wise subtraction with each tensors batches
+template<std::size_t... Dimensions>
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator-(const Tensor<Dimensions..., batch_size>& tensor) const
 {
-    Tensor<Dimensions..., minibatchSize> output;
+    Tensor<Dimensions..., batch_size> output;
 
     output.init();
 
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
-    {
-        size_t i = 0;
+    size_t b, i;
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+    for (b = 0; b < batch_size; ++b)
+    {
+        for (i = 0; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1126,23 +1154,23 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator-(
 }
 
 
-// Element-wise multiplication with a Tensor of the same dimensions
-template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator*(const Tensor<Dimensions..., minibatchSize>& tensor)
+// Element-wise multiplication with each tensors batches
+template<std::size_t... Dimensions>
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator*(const Tensor<Dimensions..., batch_size>& tensor) const
 {
-    Tensor<Dimensions..., minibatchSize> output;
+    Tensor<Dimensions..., batch_size> output;
 
     output.init();
 
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
-    {
-        size_t i = 0;
+    size_t b, i;
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+    for (b = 0; b < batch_size; ++b)
+    {
+        for (i = 0; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1164,23 +1192,23 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator*(
 }
 
 
-// Element-wise division with a Tensor of the same dimensions
-template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator/(const Tensor<Dimensions..., minibatchSize>& tensor)
+// Element-wise division with each tensors batches
+template<std::size_t... Dimensions>
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator/(const Tensor<Dimensions..., batch_size>& tensor) const
 {
-    Tensor<Dimensions..., minibatchSize> output;
+    Tensor<Dimensions..., batch_size> output;
 
     output.init();
 
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
-    {
-        size_t i = 0;
+    size_t b, i;
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+    for (b = 0; b < batch_size; ++b)
+    {
+        for (i = 0; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1202,19 +1230,19 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator/(
 }
 
 
-// Element-wise addition with a rvalue Tensor of the same dimensions
+// Element-wise addition with each tensors batches rvalue Tensor
 template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator+(Tensor<Dimensions..., minibatchSize>&& tensor)
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator+(Tensor<Dimensions..., batch_size>&& tensor) const
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
-
     
-    for (size_t b = 0; b < minibatchSize; ++b)
-    {
-        size_t i = 0;
+    size_t b, i;
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+    for (b = 0; b < batch_size; ++b)
+    {
+        for (i = 0; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1236,19 +1264,19 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator+(
 }
 
 
-// Element-wise subtraction with a rvalue Tensor of the same dimensions
+// Element-wise subtraction with each tensors batches rvalue Tensor
 template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator-(Tensor<Dimensions..., minibatchSize>&& tensor)
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator-(Tensor<Dimensions..., batch_size>&& tensor) const
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
-    {
-        size_t i = 0;
+    size_t b, i;
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+    for (b = 0; b < batch_size; ++b)
+    {
+        for (i = 0; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1270,19 +1298,19 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator-(
 }
 
 
-// Element-wise multiplication with a rvalue Tensor of the same dimensions
+// Element-wise multiplication with each tensors batches rvalue Tensor
 template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator*(Tensor<Dimensions..., minibatchSize>&& tensor)
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator*(Tensor<Dimensions..., batch_size>&& tensor) const
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
-    {
-        size_t i = 0;
+    size_t b, i;
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+    for (b = 0; b < batch_size; ++b)
+    {
+        for (i = 0; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1304,19 +1332,20 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator*(
 }
 
 
-// Element-wise division with a rvalue Tensor of the same dimensions
+// Element-wise division with each tensors batches rvalue Tensor
 template<std::size_t ...Dimensions>
-constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator/(Tensor<Dimensions..., minibatchSize>&& tensor)
+template<std::size_t batch_size>
+constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator/(Tensor<Dimensions..., batch_size>&& tensor) const
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
-    {
-        size_t i = 0;
+    size_t b, i;
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+    for (b = 0; b < batch_size; ++b)
+    {
+        
+        for (i = 0; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1340,21 +1369,21 @@ constexpr Tensor<Dimensions..., minibatchSize> Tensor<Dimensions...>::operator/(
 
 // Element-wise addition of the tensor with another tensor of the same dimensions
 template<std::size_t ...Dimensions>
-constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., minibatchSize>& tensor)
+template<std::size_t batch_size>
+constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., batch_size>& tensor)
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
     size_t i = 0;
 
-    
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
 
         PACKAGE_TYPE sum = packedValuesA;
 
-        for (size_t b = 0; b < minibatchSize; ++b)
+        for (size_t b = 0; b < batch_size; ++b)
         {
 			const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
 
@@ -1371,7 +1400,7 @@ constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., min
         PACKAGE_TYPE sum = packedValuesA;
 
         
-        for (size_t b = 0; b < minibatchSize; ++b)
+        for (size_t b = 0; b < batch_size; ++b)
         {
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
 
@@ -1383,23 +1412,23 @@ constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., min
 }
 
 
-// Element-wise subtraction of the tensor with another tensor of the same dimensions
+// Element-wise subtraction of the tensor with each tensors batches
 template<std::size_t ...Dimensions>
-constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., minibatchSize>& tensor)
+template<std::size_t batch_size>
+constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., batch_size>& tensor)
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
     size_t i = 0;
 
-    
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
 
         PACKAGE_TYPE sum = packedValuesA;
 
-        for (size_t b = 0; b < minibatchSize; ++b)
+        for (size_t b = 0; b < batch_size; ++b)
         {
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
 
@@ -1415,8 +1444,8 @@ constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., min
 
         PACKAGE_TYPE sum = packedValuesA;
 
-        
-        for (size_t b = 0; b < minibatchSize; ++b)
+
+        for (size_t b = 0; b < batch_size; ++b)
         {
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
 
@@ -1428,91 +1457,151 @@ constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., min
 }
 
 
-// Element-wise multiplication of the tensor with another tensor of the same dimensions
+// Sum of Element-wise multiplication of the tensor with each tensors batches
 template<std::size_t ...Dimensions>
-constexpr void Tensor<Dimensions...>::operator*=(const Tensor<Dimensions..., minibatchSize>& tensor)
+template<std::size_t batch_size>
+constexpr void Tensor<Dimensions...>::operator*=(const Tensor<Dimensions..., batch_size>& tensor)
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    size_t i = 0;
+    size_t b;
+
+    for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        size_t i = 0;
+        PACKAGE_TYPE sum = _SETZERO();
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+
+        for (b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _STORE(this->_values + i, _MUL(packedValuesA, packedValuesB));
+            const PACKAGE_TYPE product = _MUL(packedValuesA, packedValuesB);
+
+            sum = _ADD(sum, product);
         }
 
-        if constexpr (offset)
+        _STORE(this->_values + i, sum);
+    }
+
+    if constexpr (offset)
+    {
+        PACKAGE_TYPE sum = _SETZERO();
+
+        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+
+        for (size_t b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), _MUL(packedValuesA, packedValuesB));
-
+            const PACKAGE_TYPE product = _MUL(packedValuesA, packedValuesB);
+            sum = _ADD(sum, product);
         }
+
+        _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), sum);
     }
 }
 
 
-// Element-wise division of the tensor with another tensor of the same dimensions
+// Sum of Element - wise division of the tensor with each tensors batches
 template<std::size_t ...Dimensions>
-constexpr void Tensor<Dimensions...>::operator/=(const Tensor<Dimensions..., minibatchSize>& tensor)
+template<std::size_t batch_size>
+constexpr void Tensor<Dimensions...>::operator/=(const Tensor<Dimensions..., batch_size>& tensor)
 {
     constexpr size_t size = this->_size;
     constexpr uint16_t offset = this->_offset;
 
-    
-    for (size_t b = 0; b < minibatchSize; ++b)
+    size_t i = 0;
+    size_t b;
+
+    for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
-        size_t i = 0;
+        PACKAGE_TYPE sum = _SETZERO();
 
-        for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
+        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+
+        for (b = 0; b < batch_size; ++b)
         {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
             const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
 
-            _STORE(this->_values + i, _DIV(packedValuesA, packedValuesB));
+            const PACKAGE_TYPE product = _DIV(packedValuesA, packedValuesB);
+
+            sum = _ADD(sum, product);
         }
 
-        if constexpr (offset)
-        {
-            const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
-            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
-
-            _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), _DIV(packedValuesA, packedValuesB));
-
-        }
+        _STORE(this->_values + i, sum);
     }
-}*/
+
+    if constexpr (offset)
+    {
+        PACKAGE_TYPE sum = _SETZERO();
+
+        const PACKAGE_TYPE packedValuesA = _LOAD(this->_values + i);
+
+        for (size_t b = 0; b < batch_size; ++b)
+        {
+            const PACKAGE_TYPE packedValuesB = _LOAD(tensor._values + b * size + i);
+
+            const PACKAGE_TYPE product = _DIV(packedValuesA, packedValuesB);
+            sum = _ADD(sum, product);
+        }
+
+        _MASKSTORE(this->_values + i, remainderMaskSI<offset>(), sum);
+    }
+}
 
 
 // ------ TENSORS BASIC FUNCTIONS -------
 
 
 // To print the tensor elements
-template<std::size_t ...Dimensions>
+template <std::size_t... Dimensions>
 void print(const Tensor<Dimensions...>& tensor, float decimals)
 {
-    assert(tensor._values != nullptr && "Error the given tensor is empty.");
+    assert(tensor._values != nullptr && "Error: the given tensor is empty.");
 
-    const float coef = pow(10.f, decimals);
+    std::cout << std::fixed << std::setprecision(static_cast<int>(decimals));
 
     constexpr std::size_t dimensions[] = { Dimensions... };
+    const size_t size = tensor._size;
 
-    
-    for (std::size_t d = 0; d < tensor._size; ++d) 
-    {
-        std::cout << roundf(tensor._values[d] * coef) / coef << " ";
-
-        if ((d + 1) % dimensions[0] == 0) 
-            std::cout << std::endl;
+    if constexpr (sizeof...(Dimensions) == 1) {
+        // For 1D tensor (vector)
+        for (std::size_t d = 0; d < size; ++d) {
+            std::cout << tensor._values[d] << " ";
+        }
     }
+    else if constexpr (sizeof...(Dimensions) == 2) {
+        // For 2D tensor (matrix)
+        const size_t rows = dimensions[1];
+        const size_t cols = dimensions[0];
+        for (std::size_t r = 0; r < rows; ++r) {
+            for (std::size_t c = 0; c < cols; ++c) {
+                std::cout << tensor._values[r * cols + c] << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+    else {
+        // For Higher-dimensional tensor
+        const size_t rows = dimensions[1];
+        const size_t cols = dimensions[0];
+        for (std::size_t d = 0; d < size; ++d) {
+            std::cout << tensor._values[d] << " ";
+
+            if ((d + 1) % cols == 0) {
+                std::cout << std::endl;
+            }
+
+            if ((d + 1) % (cols * rows) == 0 && d != size - 1) {
+                std::cout << std::endl;
+            }
+        }
+    }
+
+    std::cout << std::defaultfloat;
 }
 
 
@@ -1944,26 +2033,14 @@ Tensor<Dimensions...> multiply_and_sub(const Tensor<Dimensions...>& tensorA, con
 template <std::size_t cols, std::size_t rows, std::size_t... rest>
 Tensor<rows, cols, rest...> transpose(const Tensor<cols, rows, rest...>& tensor)
 {
-    Tensor<cols, rows, rest...> output;
-    output.init();
-    
-    for (std::size_t r = 0; r < rows; ++r)
-    {
-        for (std::size_t c = 0; c < cols; ++c)
-        {
-            output._values[r * cols + c] = tensor._values[c * rows + r];
-        }
-    }
-
-
-    /*Tensor<cols, rows, rest...> output;
+    Tensor<rows, cols, rest...> output;
     output.init();
 
-    constexpr std::size_t colsA = rows;
-    constexpr std::size_t rowsA = cols;
+    constexpr std::size_t colsA = cols;
+    constexpr std::size_t rowsA = rows;
 
-    constexpr std::size_t colsB = cols;
-    constexpr std::size_t rowsB = rows;
+    constexpr std::size_t colsB = rows;
+    constexpr std::size_t rowsB = cols;
 
     constexpr std::uint16_t offColsA = colsA % PACKAGE_LENGTH;
     constexpr std::uint16_t offRowsA = rowsA % PACKAGE_LENGTH;
@@ -1985,6 +2062,7 @@ Tensor<rows, cols, rest...> transpose(const Tensor<cols, rows, rest...>& tensor)
             for (std::uint16_t i = 0; i < PACKAGE_LENGTH; ++i)
             {
 				row[i] = _LOAD(tensor._values + (r + i) * colsA + c);
+
             }
 
             #ifdef PACKAGE_M256
@@ -2072,7 +2150,7 @@ Tensor<rows, cols, rest...> transpose(const Tensor<cols, rows, rest...>& tensor)
                 _MASKSTORE(output._values + (c + i) * colsB + r, remainderMaskSI<offRowsA>(), row[i]);
             }
         }
-    }*/
+    }
    
     return output;
 }
