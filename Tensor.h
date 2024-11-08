@@ -38,10 +38,6 @@ private :
     // The number of elements which cannot fit in a package
     static constexpr uint16_t _offset = _size % PACKAGE_LENGTH;
 
-    static constexpr size_t UNROLL_FACTOR = (_size >= 16 * PACKAGE_LENGTH) ? 16 :
-                                            (_size >= 8 * PACKAGE_LENGTH) ? 8 :
-                                            (_size >= 4 * PACKAGE_LENGTH) ? 4 : 1;
-
 public:
 
 
@@ -458,6 +454,10 @@ private:
     // To get access to private members of Tensor with different dimensions
     template <std::size_t... otherDimensions>
     friend class Tensor;
+
+    static constexpr uint16_t UNROLL_FACTOR = (_size >= 16 * PACKAGE_LENGTH) ? 16 :
+                                              (_size >= 8 * PACKAGE_LENGTH) ? 8 :
+                                              (_size >= 4 * PACKAGE_LENGTH) ? 4 : 1;
 };
 
 #include "Tensor.cpp"

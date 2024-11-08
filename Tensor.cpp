@@ -9,6 +9,7 @@
 #include <random>
 #include <chrono>
 
+
 // TODO : Look for OpenMP for threading and compare it with manual threading
 //        See for the other implementation of the argmax function
 //        See for the other implementation of the transpose function
@@ -39,7 +40,6 @@
 
 
 */
-
 
 // ------- TENSORS ALIAS -------
 
@@ -78,7 +78,8 @@ inline constexpr Tensor<Dimensions...>::Tensor(const Tensor<Dimensions...>& othe
 {
     init();
 
-    std::memcpy(this->_values, other._values, _size * sizeof(float));
+    if(other._values)
+        std::memcpy(this->_values, other._values, _size * sizeof(float));
 }
 
 
@@ -129,7 +130,7 @@ constexpr Tensor<Dimensions...>::Tensor(float value)
 
     size_t i = 0;
 
-    UNROLL_LOOP(6)
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         _STORE(_values + i, packedValue);
@@ -174,10 +175,11 @@ Tensor<Dimensions...> zeros()
     const PACKAGE_FLOAT packedValues = _SETZERO();
 
     constexpr uint16_t offset = output._offset;
-    constexpr uint16_t size = output._size;
+    constexpr std::size_t size = output._size;
 
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
         _STORE(output._values + i, packedValues);
@@ -207,7 +209,7 @@ Tensor<Dimensions...> normal(float mean, float std)
     output.init();
 
     constexpr uint16_t offset = output._offset;
-    constexpr uint16_t size = output._size;
+    constexpr size_t size = output._size;
 
     auto seed = (unsigned)std::chrono::system_clock::now().time_since_epoch().count();// To get differents epochs 
     std::default_random_engine generator(seed);// Create a generator of random numbers
@@ -216,6 +218,7 @@ Tensor<Dimensions...> normal(float mean, float std)
 
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT randomValues = _RAND(generator, distribution);
@@ -286,7 +289,8 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(float value) co
     const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
-    
+
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -317,7 +321,8 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(float value) co
     const PACKAGE_FLOAT packedValues = _SET1_PS(value);
 
     size_t i = 0;
-    
+
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -349,6 +354,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(float value) co
 
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -383,6 +389,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(float value) co
 
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -410,6 +417,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(float value) &&
 
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -437,6 +445,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(float value)&&
 
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -464,6 +473,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(float value)&&
 
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -491,6 +501,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(float value)&&
 
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -519,6 +530,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(const Tensor<Di
 
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -550,6 +562,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(const Tensor<Di
 
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -581,6 +594,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(const Tensor<Di
 
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -612,6 +626,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(const Tensor<Di
 
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -639,6 +654,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(const Tensor<Di
 {
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -666,6 +682,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(const Tensor<Di
 {
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -693,6 +710,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(const Tensor<Di
 {
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -720,6 +738,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(const Tensor<Di
 {
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -747,6 +766,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(Tensor<Dimensio
 {
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -774,6 +794,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(Tensor<Dimensio
 {
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -801,6 +822,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(Tensor<Dimensio
 {
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -828,6 +850,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(Tensor<Dimensio
 {
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -854,6 +877,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator+(Tensor<Dimensio
 {
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -879,6 +903,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator-(Tensor<Dimensio
 {
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -905,6 +930,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator*(Tensor<Dimensio
 {
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -931,6 +957,7 @@ constexpr Tensor<Dimensions...> Tensor<Dimensions...>::operator/(Tensor<Dimensio
 {
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -957,6 +984,7 @@ constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions...>& te
 {
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -981,6 +1009,7 @@ constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions...>& te
 {
     size_t i = 0;
 
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1005,6 +1034,7 @@ constexpr void Tensor<Dimensions...>::operator*=(const Tensor<Dimensions...>& te
 {
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1028,7 +1058,8 @@ template<std::size_t ...Dimensions>
 constexpr void Tensor<Dimensions...>::operator/=(const Tensor<Dimensions...>& tensor)
 {
     size_t i = 0;
-        
+    
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1093,6 +1124,7 @@ constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator+(con
     {
         size_t i = 0;
         
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1131,6 +1163,7 @@ constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator-(con
     {
         size_t i = 0;
 
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1169,6 +1202,7 @@ constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator*(con
     {
         size_t i = 0;
 
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1207,6 +1241,7 @@ constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator/(con
     {
         size_t i = 0;
 
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1241,6 +1276,7 @@ constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator+(Ten
     {
         size_t i = 0;
 
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1275,6 +1311,7 @@ constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator-(Ten
     {
         size_t i = 0;
 
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1309,6 +1346,7 @@ constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator*(Ten
     {
         size_t i = 0;
 
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1343,6 +1381,7 @@ constexpr Tensor<Dimensions..., batch_size> Tensor<Dimensions...>::operator/(Ten
     {
         size_t i = 0;
         
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
@@ -1397,7 +1436,6 @@ constexpr void Tensor<Dimensions...>::operator+=(const Tensor<Dimensions..., bat
 
         PACKAGE_FLOAT sum = packedValuesA;
 
-        
         for (size_t b = 0; b < batch_size; ++b)
         {
             const PACKAGE_FLOAT packedValuesB = _LOAD(tensor._values + b * size + i);
@@ -1441,7 +1479,6 @@ constexpr void Tensor<Dimensions...>::operator-=(const Tensor<Dimensions..., bat
         const PACKAGE_FLOAT packedValuesA = _LOAD(this->_values + i);
 
         PACKAGE_FLOAT sum = packedValuesA;
-
 
         for (size_t b = 0; b < batch_size; ++b)
         {
@@ -1626,6 +1663,7 @@ Tensor<Dimensions...> abs(const Tensor<Dimensions...>& tensor)
 
     size_t i = 0;
     
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValues = _LOAD(tensor._values + i);
@@ -1680,7 +1718,6 @@ constexpr Tensor<splittedDimensions...>* Tensor<Dimensions...>::split()
     debug_assert(this->_values != nullptr && "Error in Tensor split : tensor not initialized");
 
     Tensor<splittedDimensions...>* splittedTensors = new Tensor<splittedDimensions...>[numSplits];
-
     
     for (size_t i = 0; i < numSplits; ++i)
     {
@@ -1721,6 +1758,7 @@ constexpr float Tensor<Dimensions...>::sum() const
     {
         size_t i = PACKAGE_LENGTH;
 
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
@@ -1837,6 +1875,7 @@ constexpr float Tensor<Dimensions...>::max() const
     {
         size_t i = PACKAGE_LENGTH;
 
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
@@ -1891,6 +1930,7 @@ constexpr float Tensor<Dimensions...>::variance(float mean) const
     {
         size_t i = PACKAGE_LENGTH;
         
+        UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= _size; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packedValues = _LOAD(_values + i);
@@ -1935,7 +1975,7 @@ Tensor<Dimensions...> multiply_and_add(const Tensor<Dimensions...>& tensorA, con
 
     size_t i = 0;
 
-    
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(tensorA._values + i);
@@ -1975,7 +2015,7 @@ Tensor<Dimensions...> multiply_and_sub(const Tensor<Dimensions...>& tensorA, con
 
     size_t i = 0;
 
-    
+    UNROLL_LOOP(Tensor<Dimensions...>::UNROLL_FACTOR)
     for (; i + PACKAGE_LENGTH <= size; i += PACKAGE_LENGTH)
     {
         const PACKAGE_FLOAT packedValuesA = _LOAD(tensorA._values + i);
@@ -2118,6 +2158,9 @@ Tensor<rows, cols, rest...> transpose(const Tensor<cols, rows, rest...>& tensor)
 template<std::size_t colsA, std::size_t rowsA, std::size_t colsB, std::size_t... rest>
 Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, const Tensor<colsB, colsA, rest...>& tensorB)
 {
+    constexpr std::size_t COLS_A_UNROLL_FACTOR = (colsA >= 16) ? 16 :
+                                                 (colsA >= 8) ? 8 :
+                                                 (colsA >= 4) ? 4 : 1;
     constexpr auto offCols = colsB % PACKAGE_LENGTH;
     constexpr std::size_t outerLength = (1 * ... * rest);
 
@@ -2145,6 +2188,7 @@ Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, 
 
                 PACKAGE_FLOAT sum = _MUL(_LOAD1(iterA), _LOAD(iterB));
 
+                UNROLL_LOOP(COLS_A_UNROLL_FACTOR)
                 for (std::size_t i = 1; i < colsA; ++i)
                 {
                     const PACKAGE_FLOAT packageA = _LOAD1(iterA + i);
@@ -2166,6 +2210,7 @@ Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, 
 
                 PACKAGE_FLOAT sum = _MUL(_LOAD1(iterA), _LOAD(iterB));
 
+                UNROLL_LOOP(COLS_A_UNROLL_FACTOR)
                 for (std::size_t i = 1; i < colsA; ++i)
                 {
                     const PACKAGE_FLOAT packageA = _LOAD1(iterA + i);
@@ -2194,6 +2239,10 @@ Tensor<colsB, rowsA, rest...> mul(const Tensor<colsA, rowsA, rest...>& tensorA, 
 template<std::size_t colsA, std::size_t rowsA, std::size_t colsB, std::size_t... rest>
 Tensor<colsB, rowsA, rest...> mul_transposed(const Tensor<colsA, rowsA, rest...>& tensorA, const Tensor<colsA, colsB, rest...>& tensorB)
 {
+    constexpr std::size_t COLS_A_UNROLL_FACTOR = (colsA >= 17 * PACKAGE_LENGTH) ? 16 :
+                                                 (colsA >= 9 * PACKAGE_LENGTH) ? 8 :
+                                                 (colsA >= 5 * PACKAGE_LENGTH) ? 4 : 1;
+
     constexpr auto offcols = colsA % PACKAGE_LENGTH;
     constexpr std::size_t outerLenght = (1 * ... * rest);
 
@@ -2226,6 +2275,7 @@ Tensor<colsB, rowsA, rest...> mul_transposed(const Tensor<colsA, rowsA, rest...>
 
                     std::size_t i = PACKAGE_LENGTH;
 
+                    UNROLL_LOOP(COLS_A_UNROLL_FACTOR)
                     for (; i + PACKAGE_LENGTH <= colsA; i += PACKAGE_LENGTH)
                     {
                         const PACKAGE_FLOAT packageA = _LOAD(iterA + i);
@@ -2273,6 +2323,10 @@ Tensor<colsB, rowsA, rest...> mul_transposed(const Tensor<colsA, rowsA, rest...>
 template<std::size_t colsA, std::size_t rowsA>
 Tensor<rowsA> mul_b_transposed_scalar(const Tensor<colsA, rowsA>& tensorA, const Tensor<colsA>& tensorB)
 {
+    constexpr std::size_t COLS_A_UNROLL_FACTOR = (colsA >= 17 * PACKAGE_LENGTH) ? 16 :
+                                                 (colsA >= 9 * PACKAGE_LENGTH) ? 8 :
+                                                 (colsA >= 5 * PACKAGE_LENGTH) ? 4 : 1;
+
     constexpr auto offCols = colsA % PACKAGE_LENGTH;
 
     const auto mask = remainderMaskSI<offCols>();
@@ -2299,6 +2353,7 @@ Tensor<rowsA> mul_b_transposed_scalar(const Tensor<colsA, rowsA>& tensorA, const
 
             std::size_t i = PACKAGE_LENGTH;
 
+            UNROLL_LOOP(COLS_A_UNROLL_FACTOR)
             for (; i + PACKAGE_LENGTH <= colsA; i += PACKAGE_LENGTH)
             {
                 const PACKAGE_FLOAT packageA = _LOAD(iterA + i);
@@ -2344,6 +2399,10 @@ Tensor<rowsA> mul_b_transposed_scalar(const Tensor<colsA, rowsA>& tensorA, const
 template<std::size_t colsA, std::size_t colsB>
 Tensor<colsB, colsA> mul_transposed_scalar(const Tensor<colsA>& tensorA, const Tensor<colsB>& tensorB)
 {
+    constexpr std::size_t COLS_B_UNROLL_FACTOR = (colsB >= 16 * PACKAGE_LENGTH) ? 16 :
+                                                 (colsB >= 8 * PACKAGE_LENGTH) ? 8 :
+                                                 (colsB >= 4 * PACKAGE_LENGTH) ? 4 : 1;
+
     constexpr auto offset = colsB % PACKAGE_LENGTH;
 
     const auto mask = remainderMaskSI<offset>();
@@ -2359,6 +2418,7 @@ Tensor<colsB, colsA> mul_transposed_scalar(const Tensor<colsA>& tensorA, const T
 
         std::size_t i = 0;
 
+        UNROLL_LOOP(COLS_B_UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= colsB; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packageB = _LOAD(tensorB._values + i);
@@ -2385,6 +2445,7 @@ Tensor<colsB, colsA> mul_transposed_scalar(const Tensor<colsA>& tensorA, const T
 
         std::size_t i = 0;
 
+        UNROLL_LOOP(COLS_B_UNROLL_FACTOR)
         for (; i + PACKAGE_LENGTH <= colsB; i += PACKAGE_LENGTH)
         {
             const PACKAGE_FLOAT packageB = _LOAD(tensorB._values + i);
